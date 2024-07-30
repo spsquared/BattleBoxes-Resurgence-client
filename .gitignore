@@ -1,0 +1,15 @@
+# Vite
+*.vite
+vite.config.ts.timestamp*
+
+# Builds and stuff
+dist/
+*.cache
+*.tsbuildinfo
+
+# npm dependencies
+node_modules/
+
+# environment variables
+*.env
+*.env.production

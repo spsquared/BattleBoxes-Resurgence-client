@@ -1,0 +1,54 @@
+@font-face {
+    font-family: 'Pixel';
+    font-weight: normal;
+    font-style: normal;
+    src: url(./miniset2.woff) format(woff), url(./miniset2.woff2) format(woff2);
+}
+
+body {
+    font-family: 'Pixel', Arial, sans-serif;
+    font-size: 12px;
+    background-color: white;
+    color: black;
+    overflow: hidden;
+    margin: 0px 0px;
+    scroll-behavior: smooth;
+}
+
+#root {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
+    background-color: white;
+}
+
+* {
+    --font-16: max(10px, min(16px, 4vw, 8vh));
+    --font-18: max(10px, min(18px, 4vw, 9vh));
+    --font-20: max(10px, min(20px, 5vw, 10vh));
+    --font-24: max(12px, min(24px, 5vw, 12vh));
+    --font-28: max(14px, min(28px, 7vw, 13vh));
+    --font-32: max(14px, min(32px, 8vw, 14vh));
+    --font-40: max(16px, min(40px, 9vw, 16vh));
+    --font-48: max(18px, min(48px, 10vw, 18vh));
+    --font-small: var(--font-18);
+    --font-medium: var(--font-24);
+    --font-large: var(--font-32);
+    --font-huge: var(--font-48);
+    --font-huge-title: min(12.5vw, 20vh);
+    --font-title: min(10vw, 15vh);
+    --font-subtitle: min(10vw, 7vh);
+    --font-subsubtitle: min(5vw, 5vh);
+}
+
+img {
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+button {
+    font-family: 'Pixel', Arial, sans-serif;
+    font-size: 12px;
+}

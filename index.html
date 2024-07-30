@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- need to add domains later -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self' 'unsafe-eval' 'unsafe-inline';
+        script-src 'self' 'unsafe-eval' 'unsafe-inline';
+        script-src-elem 'self' 'unsafe-eval' 'unsafe-inline';
+        img-src 'self' https://raw.githubusercontent.com/spsquared/;
+        font-src 'self' data:;
+        frame-src 'self' 'unsafe-eval' 'unsafe-inline';
+        connect-src 'self' https://localhost:* wss://localhost:* 'unsafe-eval' 'unsafe-inline';
+        ">
+    <meta name="title" content="BattleBoxes Resurgence">
+    <meta name="description" content="AI plays a de-spaghettified BattleBoxes Multiplayer">
+    <meta name="url" content="">
+    <meta name="image" content="">
+    <meta property="og:title" content="BattleBoxes Resurgence">
+    <meta property="og:description" content="AI plays a de-spaghettified BattleBoxes Multiplayer">
+    <meta property="og:url" content="">
+    <meta property="og:image" content="">
+    <meta property="og:image:width" content="256">
+    <meta property="og:image:height" content="256">
+    <title>BattleBoxes Resurgence</title>
+    <link rel="icon" href="/favicon.png" type="image/png">
+</head>
+
+<body>
+    <div style="position: absolute; top: 0px; left: 0px; font-size: 20px;">
+        If you're seeing this, the page didn't load correctly. Try <a href="">reloading</a>!
+    </div>
+    <div id="root"></div>
+    <div id="loadingCover">
+        <div id="loadingCoverBar"></div>
+        <noscript id="noscript">JavaScript was disabled!<br>Please enable it and <a href="" style="color: white">reload</a>!</noscript>
+        <div id="loadingErrorsContainer">
+            <div id="loadingError"></div>
+        </div>
+        <style>
+            body {
+                background-color: black;
+                color: white;
+            }
+
+            a {
+                color: lime !important;
+            }
+
+            #loadingCover {
+                position: fixed;
+                top: 0px;
+                left: 0px;
+                width: 100vw;
+                height: 100vh;
+                text-align: center;
+                background-color: black;
+                transition: 200ms linear opacity;
+                z-index: 1000;
+                cursor: wait;
+            }
+
+            #loadingCoverBar {
+                position: fixed;
+                top: calc(50vh - 0.5vw);
+                left: 35vw;
+                width: 30vw;
+                height: 1vw;
+                background: linear-gradient(#0C0 0 0), linear-gradient(#0C0 0 0), white;
+                background-size: 60% 100%;
+                background-repeat: no-repeat;
+                box-shadow: 0px 0px 0.5vw rgba(255, 255, 255, 0.5);
+                animation: pageLoadCoverProgress ease 2s infinite;
+            }
+
+            #noscript {
+                position: fixed;
+                top: 55vh;
+                left: 0vw;
+                width: 100vw;
+                text-align: center;
+            }
+
+            #loadingErrorsContainer {
+                position: fixed;
+                top: 55vh;
+                left: 0vw;
+                width: 100vw;
+                text-align: center;
+            }
+
+            #loadingError {
+                color: red;
+            }
+
+            @keyframes pageLoadCoverProgress {
+                0% {
+                    background-position: -150% 0, -150% 0;
+                }
+
+                66% {
+                    background-position: 250% 0, -150% 0;
+                }
+
+                100% {
+                    background-position: 250% 0, 250% 0;
+                }
+            }
+        </style>
+        <script>
+            let canLoad = true;
+            const loadingCover = document.getElementById('loadingCover');
+            const loadingError = document.getElementById('loadingError');
+            const errorListener = (err) => {
+                loadingError.innerText += `\n${err.message} (at ${err.filename} ${err.lineno}:${err.colno})`;
+                loadingCover.style.opacity = 1;
+                canLoad = false;
+            };
+            document.addEventListener('DOMContentLoaded', async (e) => {
+                loadingCover.style.opacity = 0;
+                loadingCover.style.pointerEvents = 'none';
+                await Promise.all([
+                    new Promise((resolve) => window.addEventListener('load', resolve)),
+                    new Promise((resolve) => setTimeout(resolve, 200))
+                ]);
+                if (!canLoad) {
+                    loadingCover.style.opacity = 1;
+                    loadingCover.style.pointerEvents = '';
+                    return;
+                }
+                loadingCover.remove();
+                window.removeEventListener('error', errorListener);
+                if (document.getElementById('root').children.length == 0) window.location.reload();
+            });
+            window.addEventListener('error', errorListener);
+        </script>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
