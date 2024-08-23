@@ -1,17 +1,21 @@
 <script setup lang="ts">
+import { gameState } from './game';
 </script>
 
 <template>
     <Transition>
-        <div class="gameView">
+        <div class="gameView" v-if="gameState.inGame">
         </div>
     </Transition>
 </template>
 
 <style scoped>
 .gameView {
-    width: 100%;
-    height: 100%;
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
     background-color: transparent;
 }
 

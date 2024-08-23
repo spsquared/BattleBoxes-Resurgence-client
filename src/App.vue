@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-
-const buh = ref(0);
-setInterval(() => buh.value = (buh.value + 1) % 2, 1000)
+import GameView from './game/GameView.vue';
+import MenuView from './menu/MenuView.vue';
+import LoginView from './login/LoginView.vue';
 </script>
 
-<template name="app">
-    omg its bootlebooxes!!
-    <button>button so the page doesn't spam reload</button>
+<template>
+    <GameView></GameView>
+    <MenuView></MenuView>
+    <LoginView></LoginView>
 </template>
 
 <style scoped>
