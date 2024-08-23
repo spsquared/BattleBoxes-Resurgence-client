@@ -30,10 +30,8 @@
 </head>
 
 <body>
-    <div style="position: absolute; top: 0px; left: 0px; font-size: 20px;">
-        If you're seeing this, the page didn't load correctly. Try <a href="">reloading</a>!
-    </div>
-    <div id="root"></div>
+    <div id="canvasRoot"></div>
+    <div id="pageRoot"></div>
     <div id="loadingCover">
         <div id="loadingCoverBar"></div>
         <noscript id="noscript">JavaScript was disabled!<br>Please enable it and <a href="" style="color: white">reload</a>!</noscript>
@@ -41,11 +39,6 @@
             <div id="loadingError"></div>
         </div>
         <style>
-            body {
-                background-color: black;
-                color: white;
-            }
-
             a {
                 color: lime !important;
             }
@@ -58,6 +51,7 @@
                 height: 100vh;
                 text-align: center;
                 background-color: black;
+                color: white;
                 transition: 200ms linear opacity;
                 z-index: 1000;
                 cursor: wait;
@@ -133,7 +127,7 @@
                 }
                 loadingCover.remove();
                 window.removeEventListener('error', errorListener);
-                if (document.getElementById('root').children.length == 0) window.location.reload();
+                if (document.getElementById('pageRoot').children.length == 0) window.location.reload();
             });
             window.addEventListener('error', errorListener);
         </script>

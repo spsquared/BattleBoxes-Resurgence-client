@@ -23,6 +23,6 @@ export default defineConfig({
         target: 'es2021'
     },
     server: {
-        port: 2000
+        port: 5170
     }
 })
