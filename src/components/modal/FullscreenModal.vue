@@ -1,8 +1,7 @@
 <!-- oops i used options and composition api -->
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
-import { glitchTextTransition } from '#/text';
-import { InputButton, InputTextBox } from '#/inputs';
+import * as Inputs from '@/components/inputs';
 
 const modalInput = ref('');
 const modal = reactive<{
@@ -51,8 +50,7 @@ const showModal = (params: ModalParams): { result: Promise<boolean | string | nu
         };
     }
     const { title, content, mode = ModalMode.NOTIFY, inputType = 'text', color = 'white', glitchTitle = false } = params;
-    if (glitchTitle) glitchTextTransition(title, title, (text) => { modal.title = text; return false }, 40, 2, 10, 1, true);
-    else modal.title = title;
+    modal.title = title;
     modal.content = content;
     modal.mode = mode;
     modalInput.value = '';
@@ -103,7 +101,7 @@ document.addEventListener('keypress', (e) => {
 });
 </script>
 <script lang="ts">
-export const enum ModalMode {
+export enum ModalMode {
     /**A notification - only an acknowledgement response */
     NOTIFY = 0,
     /**A confirmation - confirm or deny */
@@ -136,19 +134,19 @@ export interface ModalParams {
                 <h1 v-html=modal.title></h1>
                 <p v-html=modal.content></p>
                 <span v-if="modal.mode == ModalMode.QUERY">
-                    <InputTextBox v-model=modalInput :type=modal.inputType autocomplete="off"></InputTextBox>
+                    <Inputs.TextBox v-model=modalInput :type=modal.inputType autocomplete="off"></Inputs.TextBox>
                     <br>
                 </span>
                 <div class="modalButtons">
                     <span v-if="modal.mode == ModalMode.INPUT">
-                        <InputButton text="NO" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></InputButton>
-                        <InputButton text="YES" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></InputButton>
+                        <Inputs.TextButton text="NO" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
+                        <Inputs.TextButton text="YES" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                     </span>
                     <span v-else>
                         <span v-if="modal.mode == ModalMode.QUERY || modal.mode == ModalMode.CONFIRM">
-                            <InputButton text="CANCEL" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></InputButton>
+                            <Inputs.TextButton text="CANCEL" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                         </span>
-                        <InputButton text="OK" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></InputButton>
+                        <Inputs.TextButton text="OK" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                     </span>
                 </div>
             </div>

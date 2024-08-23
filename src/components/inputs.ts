@@ -1,25 +1,17 @@
-import InputButton from '#/inputs/InputButton.vue';
-import InputCopyButton from '#/inputs/InputCopyButton.vue';
-import InputDropdown from '#/inputs/InputDropdown.vue';
-import InputFileUpload from '#/inputs/InputFileUpload.vue';
-import InputIconButton from '#/inputs/InputIconButton.vue';
-import InputLinkButton from '#/inputs/InputLinkButton.vue';
-import InputNumberBox from '#/inputs/InputNumberBox.vue';
-import InputTextArea from '#/inputs/InputTextArea.vue';
-import InputTextBox from '#/inputs/InputTextBox.vue';
-import InputToggle from '#/inputs/InputToggle.vue';
-import InputTime from '#/inputs/InputTime.vue';
+import TextButton from './inputs/TextButton.vue';
+import DropdownSelect from './inputs/DropdownSelect.vue';
+import IconButton from './inputs/IconButton.vue';
+import NumberBox from './inputs/NumberBox.vue';
+import TextArea from './inputs/TextArea.vue';
+import TextBox from './inputs/TextBox.vue';
+import ToggleButton from './inputs/ToggleButton.vue';
 
 export {
-    InputButton,
-    InputCopyButton,
-    InputDropdown,
-    InputFileUpload,
-    InputIconButton,
-    InputLinkButton,
-    InputNumberBox,
-    InputTextArea,
-    InputTextBox,
-    InputToggle,
-    InputTime
+    TextButton,
+    DropdownSelect,
+    IconButton,
+    NumberBox,
+    TextArea,
+    TextBox,
+    ToggleButton,
 }

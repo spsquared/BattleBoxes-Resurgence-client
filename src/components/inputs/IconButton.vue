@@ -25,10 +25,10 @@ function click() {
 </script>
 
 <template>
-    <label :class="'uiIconButtonLabel ' + (props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title=title>
-        <input type="button" class="uiIconButton" @click=click :disabled=props.disabled>
-        <div :class="props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
-        <span class="uiIconButtonText" v-if="!props.imgOnly">{{ buttonText }}</span>
+    <label :class="'uiIconButtonLabel ' + ($props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title=title>
+        <input type="button" class="uiIconButton" @click=click :disabled=$props.disabled>
+        <div :class="$props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
+        <span class="uiIconButtonText" v-if="!$props.imgOnly">{{ $props.text }}</span>
     </label>
 </template>
 

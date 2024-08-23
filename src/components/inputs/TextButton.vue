@@ -20,7 +20,7 @@ function click() {
 </script>
 
 <template>
-    <input :type="props.type ?? 'button'" class="uiButton" :value=$props.text @click=click :title=props.title>
+    <input :type="$props.type ?? 'button'" class="uiButton" :value=$props.text @click=click :title=$props.title>
 </template>
 
 <style scoped>

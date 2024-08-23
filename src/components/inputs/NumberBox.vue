@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
     min?: number
     max?: number
     step?: number
@@ -22,7 +22,7 @@ defineExpose({
 </script>
 
 <template>
-    <input type="number" :class="'uiNumberBox ' + (props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input=input v-model=number :title=props.title :min=props.min :max=props.max :step=props.step>
+    <input type="number" :class="'uiNumberBox ' + ($props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input=input v-model=number :title=$props.title :min=$props.min :max=$props.max :step=$props.step>
 </template>
 
 <style scoped>

@@ -58,6 +58,8 @@ body {
     --font-title: min(10vw, 15vh);
     --font-subtitle: min(10vw, 7vh);
     --font-subsubtitle: min(5vw, 5vh);
+    --color-1: #0C0;
+    --color-2: #F00;
 }
 
 img {

@@ -17,6 +17,7 @@ import { gameState } from './game';
     width: 100vw;
     height: 100vh;
     background-color: transparent;
+    z-index: 2;
 }
 
 /* game transition fade screen */

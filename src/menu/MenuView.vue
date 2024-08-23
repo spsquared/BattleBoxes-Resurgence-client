@@ -26,6 +26,7 @@ import { gameState } from '@/game/game';
     width: 100vw;
     height: 100vh;
     background-color: white;
+    z-index: 1;
 }
 
 

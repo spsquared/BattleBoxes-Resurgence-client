@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
     title?: string
     width?: string
     height?: string
@@ -24,7 +24,7 @@ defineExpose({
 </script>
 
 <template>
-    <textarea class="uiTextArea" @input=input v-model=text :title=props.title :placeholder=props.placeholder></textarea>
+    <textarea class="uiTextArea" @input=input v-model=text :title=$props.title :placeholder=$props.placeholder></textarea>
 </template>
 
 <style scoped>

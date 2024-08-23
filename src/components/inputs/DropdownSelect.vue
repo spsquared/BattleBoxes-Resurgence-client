@@ -52,7 +52,7 @@ defineExpose({
     height: v-bind("$props.height ?? '32px'");
     padding: 0px 4px;
     margin: 0px 4px;
-    border: 4px solid white;
+    border: 4px solid black;
     border-radius: 0px;
     color: white;
     background-color: black;

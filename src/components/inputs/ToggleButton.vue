@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
     title?: string
     disabled?: boolean
 }>();
@@ -16,8 +16,8 @@ defineExpose({
 </script>
 
 <template>
-    <label :class="'uiToggleLabel ' + (props.disabled ? 'uiToggleLabelDisabled' : '')">
-        <input class="uiToggleInput" type="checkbox" @change=input v-model=checked :title=title :disabled=props.disabled>
+    <label :class="'uiToggleLabel ' + ($props.disabled ? 'uiToggleLabelDisabled' : '')">
+        <input class="uiToggleInput" type="checkbox" @change=input v-model=checked :title=title :disabled=$props.disabled>
         <span class="uiToggleSlider"></span>
     </label>
 </template>
