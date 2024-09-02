@@ -17,7 +17,7 @@ const modal = reactive<{
     inputType: 'text',
     open: false
 });
-const modalColor = ref('white');
+const modalColor = ref('black');
 
 let modalResolve = () => { };
 let modalReject = () => { };
@@ -49,7 +49,7 @@ const showModal = (params: ModalParams): { result: Promise<boolean | string | nu
             }
         };
     }
-    const { title, content, mode = ModalMode.NOTIFY, inputType = 'text', color = 'white', glitchTitle = false } = params;
+    const { title, content, mode = ModalMode.NOTIFY, inputType = 'text', color = 'black' } = params;
     modal.title = title;
     modal.content = content;
     modal.mode = mode;
@@ -122,8 +122,6 @@ export interface ModalParams {
     inputType?: 'text' | 'password' | 'email'
     /**Border color */
     color?: string
-    /**Cool title effect? */
-    glitchTitle?: boolean
 }
 </script>
 
@@ -139,14 +137,14 @@ export interface ModalParams {
                 </span>
                 <div class="modalButtons">
                     <span v-if="modal.mode == ModalMode.INPUT">
-                        <Inputs.TextButton text="NO" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
-                        <Inputs.TextButton text="YES" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
+                        <Inputs.TextButton text="NO" @click=modalReject width="5em" background-color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
+                        <Inputs.TextButton text="YES" @click=modalResolve width="5em" background-color="#0C0" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                     </span>
                     <span v-else>
                         <span v-if="modal.mode == ModalMode.QUERY || modal.mode == ModalMode.CONFIRM">
-                            <Inputs.TextButton text="CANCEL" @click=modalReject width="5em" color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
+                            <Inputs.TextButton text="CANCEL" @click=modalReject width="5em" background-color="red" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                         </span>
-                        <Inputs.TextButton text="OK" @click=modalResolve width="5em" color="lime" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
+                        <Inputs.TextButton text="OK" @click=modalResolve width="5em" background-color="#0C0" font="bold var(--font-16) 'Source Code Pro'"></Inputs.TextButton>
                     </span>
                 </div>
             </div>
@@ -196,7 +194,7 @@ export interface ModalParams {
     display: inline-block;
     min-width: 0px;
     padding: 4px 1em;
-    background-color: black;
+    background-color: white;
     clip-path: polygon(30px 0%, 100% 0%, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0% 100%, 0% 30px);
     text-align: center;
 }

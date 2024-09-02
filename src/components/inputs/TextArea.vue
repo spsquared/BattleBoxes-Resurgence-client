@@ -8,6 +8,9 @@ defineProps<{
     maxWidth?: string
     maxHeight?: string
     font?: string
+    fontSize?: string
+    color?: string
+    backgroundColor?: string
     placeholder?: string
     resize?: 'vertical' | 'horizontal' | 'both' | 'none'
 }>();
@@ -38,27 +41,26 @@ defineExpose({
     max-height: v-bind("$props.maxHeight ?? 'unset'");
     margin: 0px 4px;
     padding: 0px 4px;
-    border: 4px solid white;
+    border: 4px solid black;
     border-radius: 0px;
-    background-color: black;
-    color: white;
-    font: v-bind("$props.font ?? '14px inherit'");
-    font-family: 'Source Code Pro', Courier, monospace;
-    transition: 50ms linear border-color;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 90%, #808080 10%);
+    color: v-bind("$props.color ?? 'black'");
+    font: v-bind("$props.font ?? 'inherit'");
+    font-size: v-bind("$props.fontSize ?? 'var(--font-16)'");
+    font-family: 'Pixel', Arial, sans-serif;
+    transition: 50ms linear background-color;
     resize: v-bind("$props.resize ?? 'both'");
 }
 
-.uiTextArea:hover {
-    border-color: var(--color-1);
-}
-
+.uiTextArea:hover,
 .uiTextArea:focus {
-    border-color: var(--color-2);
+    background-color: v-bind("$props.backgroundColor ?? 'white'");
 }
 
 .uiTextArea:disabled {
-    border-color: #888 !important;
+    border-color: #555 !important;
     opacity: 1;
     cursor: not-allowed;
+    filter: saturate(0.5);
 }
 </style>

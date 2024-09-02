@@ -38,15 +38,15 @@ function click() {
     box-sizing: border-box;
     width: v-bind("$props.width ?? 'min-content'");
     height: v-bind("$props.height ?? 'min-content'");
-    border: 4px solid white;
+    border: 4px solid black;
     margin: 0px 4px;
     padding: 0.125em 0.4em;
-    background-color: v-bind("$props.backgroundColor ?? 'black'");
-    color: v-bind("$props.color ?? 'white'");
+    background-color: v-bind("$props.backgroundColor ?? 'white'");
+    color: v-bind("$props.color ?? 'black'");
     font: v-bind("$props.font ?? 'inherit'");
     font-size: v-bind("$props.fontSize ?? 'var(--font-16)'");
-    font-family: 'Source Code Pro', Courier, monospace;
-    transition: 50ms ease background-position, 50ms ease background-color, 50ms ease transform, 50ms ease border-color;
+    font-family: 'Pixel', Arial, sans-serif;
+    transition: 50ms ease background-position, 50ms ease background-color, 50ms ease transform;
     align-items: center;
     justify-content: center;
     cursor: pointer;
@@ -60,7 +60,7 @@ function click() {
     mask-repeat: no-repeat;
     mask-position: center;
     mask-image: v-bind("`url('${$props.img}')`");
-    background-color: v-bind("$props.imgColor ?? 'white'");
+    background-color: v-bind("$props.imgColor ?? 'black'");
     transition: 50ms linear background-color;
 }
 
@@ -83,16 +83,14 @@ function click() {
 
 .uiIconButtonLabel:hover {
     transform: translateY(-2px);
-    border-color: var(--color-1);
 }
 
 .uiIconButtonLabel:active {
     transform: translateY(2px);
-    border-color: var(--color-2);
 }
 
 .uiIconButtonLabel:hover>.uiIconButtonImage {
-    background-color: v-bind("$props.imgHoverColor ?? $props.imgColor ?? 'white'");
+    background-color: v-bind("$props.imgHoverColor ?? $props.imgColor ?? 'black'");
 }
 
 .uiIconButton {
@@ -100,9 +98,10 @@ function click() {
 }
 
 .uiIconButtonLabelDisabled {
-    border-color: #888 !important;
+    border-color: #555 !important;
     transform: none !important;
     opacity: 1;
     cursor: not-allowed;
+    filter: saturate(0.5);
 }
 </style>

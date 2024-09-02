@@ -3,11 +3,11 @@
 import '@/game/renderer';
 import '@/game/sound';
 import '@/game/entity';
+import { ref } from 'vue';
 
-import { reactive } from 'vue';
+// VERY IMPORTANT: TEST TEST TEST MAY NOT BE REACTIVE
+export const gameInstance = ref<GameInstance | null>(null);
 
-export const gameState = reactive<{
-    inGame: boolean
-}>({
-    inGame: false
-});
+export class GameInstance {
+    
+}

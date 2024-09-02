@@ -17,7 +17,7 @@ watch(() => modalComponent.value, () => {
     <GameView></GameView>
     <MenuView></MenuView>
     <LoginView></LoginView>
-    <FullscreenModal></FullscreenModal>
+    <FullscreenModal ref="modalComponent"></FullscreenModal>
 </template>
 
 <style scoped>

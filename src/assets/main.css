@@ -7,7 +7,7 @@
 
 body {
     font-family: 'Pixel', Arial, sans-serif;
-    font-size: 12px;
+    font-size: var(--font-12);
     color: black;
     background-color: white;
     overflow: hidden;
@@ -42,6 +42,7 @@ body {
 }
 
 * {
+    --font-12: max(8px, min(12px, 3vw, 6vh));
     --font-16: max(10px, min(16px, 4vw, 8vh));
     --font-18: max(10px, min(18px, 4vw, 9vh));
     --font-20: max(10px, min(20px, 5vw, 10vh));
@@ -58,8 +59,6 @@ body {
     --font-title: min(10vw, 15vh);
     --font-subtitle: min(10vw, 7vh);
     --font-subsubtitle: min(5vw, 5vh);
-    --color-1: #0C0;
-    --color-2: #F00;
 }
 
 img {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { gameState } from '@/game/game';
+import { gameInstance } from '@/game/game';
 
 </script>
 
 <template>
     <Transition>
-        <div class="menuView" v-if="!gameState.inGame">
+        <div class="menuView" v-if="gameInstance === null">
         </div>
     </Transition>
 </template>

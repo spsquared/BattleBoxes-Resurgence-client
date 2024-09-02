@@ -11,6 +11,10 @@ const props = defineProps<{
     groupedItems?: { label: string, items: DropdownItem[] }[]
     width?: string
     height?: string
+    font?: string
+    fontSize?: string
+    color?: string
+    backgroundColor?: string
     default?: string
     multiple?: boolean
 }>();
@@ -54,36 +58,37 @@ defineExpose({
     margin: 0px 4px;
     border: 4px solid black;
     border-radius: 0px;
-    color: white;
-    background-color: black;
-    font-family: 'Source Code Pro', Courier, monospace;
-    font-size: var(--font-16);
-    transition: 50ms linear border-color;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 90%, #808080 10%);
+    color: v-bind("$props.color ?? 'black'");
+    font: v-bind("$props.font ?? 'inherit'");
+    font-size: v-bind("$props.fontSize ?? 'var(--font-16)'");
+    font-family: 'Pixel', Arial, sans-serif;
+    transition: 50ms linear background-color;
     cursor: pointer;
 }
 
 .uiDropdown option {
     padding: 0px 4px;
-    background-color: black;
+    background-color: v-bind("$props.backgroundColor ?? 'white'");
     font-size: var(--font-16);
     cursor: pointer;
 }
 
 .uiDropdown option:nth-child(odd) {
-    background-color: #151515;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 75%, #808080 25%);
 }
 
 .uiDropdown option:hover {
-    background-color: #333;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 50%, #808080 50%);
 }
 
 .uiDropdown option:checked {
-    color: var(--color-1) !important;
+    color: deepskyblue !important;
 }
 
 .uiDropdown optgroup {
     padding: 0px 4px;
-    background-color: #222;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 60%, #808080 40%);
     font-weight: bold;
 }
 
@@ -92,18 +97,16 @@ defineExpose({
     cursor: default;
 }
 
-.uiDropdown:hover {
-    border-color: var(--color-1);
-}
-
+.uiDropdown:hover,
 .uiDropdown:focus {
-    border-color: var(--color-2);
+    background-color: v-bind("$props.backgroundColor ?? 'white'");
 }
 
 .uiDropdown:disabled {
-    border-color: #888 !important;
+    border-color: #555 !important;
     opacity: 1;
     cursor: not-allowed;
+    filter: saturate(0.5);
 }
 
 .uiDropdown:disabled option {
@@ -112,10 +115,10 @@ defineExpose({
 }
 
 .uiDropdown:disabled option:hover {
-    background-color: black !important;
+    background-color: v-bind("$props.backgroundColor ?? 'white'") !important;
 }
 
 .uiDropdown:disabled option:nth-child(odd):hover {
-    background-color: #151515 !important;
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 75%, #808080 25%) !important;
 }
 </style>

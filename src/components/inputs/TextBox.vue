@@ -5,6 +5,9 @@ defineProps<{
     width?: string
     height?: string
     font?: string
+    fontSize?: string
+    color?: string
+    backgroundColor?: string
     type?: 'text' | 'password' | 'email'
     placeholder?: string
     autocomplete?: 'username' | 'current-password' | 'new-password' | 'email' | 'name' | 'honorific-prefix' | 'given-name' | 'additional-name' | 'family-name' | 'honorific-suffix' | 'nickname' | 'off'
@@ -32,29 +35,28 @@ defineExpose({
     height: v-bind("$props.height ?? '32px'");
     margin: 0px 4px;
     padding: 0px 4px;
-    border: 4px solid white;
+    border: 4px solid black;
     border-radius: 0px;
-    background-color: black;
-    color: white;
-    font: v-bind("$props.font ?? '14px inherit'");
-    font-family: 'Source Code Pro', Courier, monospace;
-    transition: 50ms linear border-color;
-}
-
-.uiTextBox:hover {
-    border-color: var(--color-1);
-}
-
-.uiTextBox:focus {
-    border-color: var(--color-2);
+    background-color: color-mix(in srgb, v-bind("$props.backgroundColor ?? 'white'") 90%, #808080 10%);
+    color: v-bind("$props.color ?? 'black'");
+    font: v-bind("$props.font ?? 'inherit'");
+    font-size: v-bind("$props.fontSize ?? 'var(--font-16)'");
+    font-family: 'Pixel', Arial, sans-serif;
+    transition: 50ms linear background-color;
 }
 
 .uiTextBoxHighlightInvalid.uiTextBox:invalid {
-    border-color: var(--color-3);
+    background-color: #FE8;
+}
+
+.uiTextBox:hover,
+.uiTextBox:focus {
+    background-color: v-bind("$props.backgroundColor ?? 'white'");
 }
 
 .uiTextBox:disabled {
-    border-color: #888 !important;
+    border-color: #333 !important;
+    background-color: #CCC;
     opacity: 1;
     cursor: not-allowed;
 }
