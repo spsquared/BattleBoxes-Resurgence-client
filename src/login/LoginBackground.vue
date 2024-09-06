@@ -54,6 +54,7 @@ onMounted(calcTiles);
     grid-template-rows: repeat(v-bind("tileRows"), 48px);
     grid-template-columns: repeat(v-bind("tileCols"), 48px);
     grid-auto-columns: 16px;
+    overflow: hidden;
 }
 
 .loginSquare {

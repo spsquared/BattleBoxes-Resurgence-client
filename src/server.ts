@@ -14,59 +14,57 @@ export const createNamespacedSocket = (namespace: string, auth?: string): Socket
     });
 };
 
-export const serverFetch = (path: string, body?: string): Promise<Response> => {
-    return fetch(serverHostname + (path.startsWith('/') ? path : '/' + path), {
-        mode: 'cors',
-        credentials: 'include',
-        body: body
-    });
+export const serverFetch = async (path: string, method?: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: any): Promise<Response> => {
+    try {
+        return await fetch(serverHostname + (path.startsWith('/') ? path : '/' + path), {
+            method: method ?? 'GET',
+            mode: 'cors',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+    } catch (err) {
+        return Response.error();
+    }
 };
 
 export const connectionState = reactive<{
+    connected: boolean
+    connectionFailed: boolean
     loggedIn: boolean
+    username: string
 }>({
-    loggedIn: false
+    connected: false,
+    connectionFailed: false,
+    loggedIn: false,
+    username: 'Not Logged In'
 });
 
-export class TestClass {
-    buh: {
-        oof: boolean
-    } = {
-            oof: true
-        };
-    e: string = 'asdf';
-    testtest: {
-        u1: string,
-        u2: {
-            s: number
-        },
-        u3: boolean
-    } = {
-        u1: '1',
-        u2: {
-            s: 8383
-        },
-        u3: false
-    };
-    anotherClass: TestSubclass = new TestSubclass(2);
-}
-export class TestSubclass {
-    variable: number;
-
-    constructor(n: number) {
-        this.variable = n;
+export const httpCodeToMessage = (code: number, item?: string): string => {
+    switch (code) {
+        case 200: return 'Success';
+        case 409: return `${item ?? 'Item'} already exists`;
+        case 404: return `${item ?? 'Item'} does not exist`;
+        case 403: return 'Incorrect credentials';
+        case 500: return 'Internal error';
+        case 400: return `Malformed request (is this a bug?)`;
+        case 401: return `Not logged in`;
+        case 0: return 'Fetch failed (are you connected to the internet?)';
+        default: return `Unknown response: HTTP code ${code} (is this a bug?)`;
     }
-}
-export const test = ref(new TestClass());
-setInterval(() => {
-    test.value.buh.oof = Math.random() < 0.5;
-    test.value.e = Math.random().toFixed(2);
-    test.value.testtest = {
-        u1: Math.random().toFixed(6),
-        u2: {
-            s: Math.random() * 5
-        },
-        u3: Math.random() < 0.5
-    };
-    test.value.anotherClass = new TestSubclass(Math.random());
-}, 100)
+};
+
+const attemptConnect = async () => {
+    const res = await serverFetch('/loginTest');
+    if (res.ok) connectionState.loggedIn = true;
+    if (res.status == 0) {
+        connectionState.connectionFailed = true;
+        setTimeout(attemptConnect, 5000);
+    } else {
+        connectionState.connected = true;
+        connectionState.connectionFailed = false;
+    }
+};
+window.addEventListener('load', attemptConnect);

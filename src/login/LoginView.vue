@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { connectionState } from '@/server';
+import { connectionState, httpCodeToMessage, serverFetch } from '@/server';
 import LoginBackground from './LoginBackground.vue';
 import * as Inputs from '@/components/inputs';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { modal } from '@/components/modal';
-
-import { test } from '@/server';
+import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
 
 const waitForLogin = ref(false);
 const username = ref('');
@@ -23,60 +22,66 @@ const checkValidity = (): boolean => {
     loginMsg.value = '';
     return true;
 };
-const login = () => {
+const login = async () => {
     if (!checkValidity()) return;
     waitForLogin.value = true;
+    const loginUsername = username.value;
+    const res = await serverFetch('/login', 'POST', { username: loginUsername, password: password.value });
+    if (res.status == 200) {
+        connectionState.loggedIn = true;
+        connectionState.username = loginUsername;
+    } else modal.showModal({
+        title: 'Could not log in',
+        content: httpCodeToMessage(res.status, 'Account'),
+        color: '#F00'
+    });
+    waitForLogin.value = false;
 };
-const signup = () => {
+const signup = async () => {
     if (!checkValidity()) return;
     waitForLogin.value = true;
-    console.log('b')
+    const signupUsername = username.value;
+    const res = await serverFetch('/signup', 'POST', { username: signupUsername, password: password.value });
+    if (res.status == 200) {
+        connectionState.loggedIn = true;
+        connectionState.username = signupUsername;
+    } else modal.showModal({
+        title: 'Could not sign up',
+        content: httpCodeToMessage(res.status, 'Account'),
+        color: '#F00'
+    });
+    waitForLogin.value = false;
 };
-
-const checks = new Array(11).fill(false);
-watch(test, () => checks[0] = true)
-watch(() => test.value.buh, () => checks[1] = true)
-watch(() => test.value.buh.oof, () => checks[2] = true)
-watch(() => test.value.e, () => checks[3] = true)
-watch(() => test.value.testtest, () => checks[4] = true)
-watch(() => test.value.testtest.u1, () => checks[5] = true)
-watch(() => test.value.testtest.u2, () => checks[6] = true)
-watch(() => test.value.testtest.u2.s, () => checks[7] = true)
-watch(() => test.value.testtest.u3, () => checks[8] = true)
-watch(() => test.value.anotherClass, () => checks[9] = true)
-watch(() => test.value.anotherClass.variable, () => checks[10] = true)
-setInterval(() => console.log(checks), 1000)
 </script>
 
 <template>
     <Transition>
         <div class="loginView" v-if="!connectionState.loggedIn">
             <LoginBackground></LoginBackground>
-            <form class="loginForm" action="javascript:void(0)">
-                <div class="loginHeader">
-                    <span style="color: #0C0; font-size: var(--font-title); line-height: 0.6em;">BATTLEBOXES</span>
-                    <br>
-                    <span style="color: #F00; font-size: var(--font-subtitle);">Resurgence</span>
+            <div class="loginFlowWrapper">
+                <div class="loginFlow">
+                    <div class="loginHeader">
+                        <span style="color: #0C0; font-size: var(--font-title);">BATTLEBOXES</span>
+                        <br>
+                        <span style="color: #F00; font-size: var(--font-subtitle); line-height: 0.5em;">Resurgence</span>
+                    </div>
+                    <form :class="{ loginForm: true, loginFormHidden: !connectionState.connected }" action="javascript:void(0)">
+                        <Inputs.TextBox v-model="username" placeholder="Username" width="200px" title="Username (alphanumeric and/or dash/underscore)" maxlength="16" autocomplete="username" autocapitalize="off" highlight-invalid required></Inputs.TextBox>
+                        <Inputs.TextBox v-model="password" placeholder="Password" type="password" width="200px" title="Password" maxlength="128" autocomplete="current-password" required></Inputs.TextBox>
+                        <span style="text-wrap: nowrap;">
+                            <Inputs.TextButton text="Log in" @click="login()" width="96px" type="submit" background-color="#0C0" :disabled="waitForLogin"></Inputs.TextButton>
+                            <Inputs.TextButton text="Sign Up" @click="signup()" width="96px" type="submit" background-color="dodgerblue" :disabled="waitForLogin"></Inputs.TextButton>
+                        </span>
+                    </form>
+                    <LoadingSpinner :class="{ connectSpinner: true, connectSpinnerHidden: connectionState.connected }"></LoadingSpinner>
+                    <span class="loginMsgWrapper">
+                        <span class="loginMsg">{{ loginMsg }}</span>
+                        <Transition name="connectmsg">
+                            <span class="loginConnectMsg" v-if="!connectionState.connected">{{ connectionState.connectionFailed ? 'Error connecting to server, retrying...' : 'Connecting to server...' }}</span>
+                        </Transition>
+                    </span>
                 </div>
-                <br>
-                <Inputs.TextBox v-model="username" placeholder="Username" width="200px" style="margin-bottom: 8px;" title="Username (alphanumeric and/or dash/underscore)" maxlength="16" autocomplete="username" autocapitalize="off" highlight-invalid required></Inputs.TextBox>
-                <Inputs.TextBox v-model="password" placeholder="Password" type="password" width="200px" style="margin-bottom: 8px;" title="Password" maxlength="128" autocomplete="current-password" required></Inputs.TextBox>
-                <span style="text-wrap: nowrap;">
-                    <Inputs.TextButton text="Log in" @click="login()" width="96px" type="submit" background-color="#0C0" :disabled="waitForLogin"></Inputs.TextButton>
-                    <Inputs.TextButton text="Sign Up" @click="signup()" width="96px" type="submit" background-color="dodgerblue" :disabled="waitForLogin"></Inputs.TextButton>
-                </span>
-                <span class="loginMsgWrapper">
-                    <span class="loginMsg">{{ loginMsg }}</span>
-                    {{ test.buh.oof }}
-                    {{ test.e }}
-                    {{ test.testtest.u1 }}
-                    {{ test.testtest.u2 }}
-                    {{ test.testtest.u3 }}
-                    {{ test.testtest.u2.s }}
-                    {{ test.anotherClass }}
-                    {{ test.anotherClass.variable }}
-                </span>
-            </form>
+            </div>
         </div>
     </Transition>
 </template>
@@ -93,40 +98,92 @@ setInterval(() => console.log(checks), 1000)
     z-index: 2;
 }
 
-.loginForm {
+.loginFlowWrapper {
     display: flex;
     position: absolute;
     top: 0px;
     left: 0px;
     width: 100vw;
     height: 100vh;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     pointer-events: none;
+}
+
+.loginFlow {
+    display: grid;
+    align-items: center;
+    justify-items: center;
+}
+
+.loginHeader {
+    grid-row: 1;
+    grid-column: 1;
+    margin-bottom: var(--font-subsubtitle);
+    text-align: center;
+    pointer-events: none;
+}
+
+.loginForm {
+    grid-row: 2;
+    grid-column: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    row-gap: 8px;
+    transition: 500ms linear opacity;
+    transition-delay: 250ms;
 }
 
 .loginForm>* {
     pointer-events: auto;
 }
 
-.loginHeader {
-    text-align: center;
+.loginFormHidden {
+    opacity: 0;
+}
+
+.loginFormHidden>* {
     pointer-events: none;
 }
 
+.connectSpinner {
+    grid-row: 2;
+    grid-column: 1;
+    width: 8em;
+    height: 8em;
+    transition: 500ms linear opacity;
+}
+
+.connectSpinnerHidden {
+    opacity: 0;
+}
+
 .loginMsgWrapper {
+    grid-row: 3;
+    grid-column: 1;
     position: relative;
-    width: 40vw;
-    height: 2em;
+    width: 100%;
+    font-size: var(--font-16);
+    height: 8em;
     margin-top: 8px;
     pointer-events: none;
 }
 
 .loginMsg {
     position: absolute;
-    width: 40vw;
-    color: red;
+    width: 100%;
+    color: #F00;
+    text-align: center;
+}
+
+.loginConnectMsg {
+    position: absolute;
+    width: 100%;
+    color: v-bind("connectionState.connectionFailed ? '#F00' : '#0C0'");
+    font-size: var(--font-medium);
     text-align: center;
 }
 
@@ -137,11 +194,26 @@ setInterval(() => console.log(checks), 1000)
 
 .v-enter-from,
 .v-leave-to {
-    transform: translateY(-100%);
+    transform: translateY(calc(-100% - 16px));
 }
 
 .v-enter-to,
 .v-leave-from {
     transform: translateY(0px);
+}
+
+.connectmsg-enter-active,
+.connectmsg-leave-active {
+    transition: 500ms linear opacity;
+}
+
+.connectmsg-enter-from,
+.connectmsg-leave-to {
+    opacity: 0;
+}
+
+.connectmsg-enter-to,
+.connectmsg-leave-from {
+    opacity: 1;
 }
 </style>
