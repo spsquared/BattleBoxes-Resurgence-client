@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { startTransitionTo } from '@/menu/nav';
 import { reactive } from 'vue';
 
 const button = reactive<{
@@ -126,6 +127,7 @@ const mouseup = () => {
         button.rz = 0;
         button.sc = 1;
         button.time = 250;
+        setTimeout(() => startTransitionTo('gameSelect'), 1000);
     }
 };
 
@@ -228,7 +230,7 @@ updateBobAnimation();
     background-color: transparent;
     transition: v-bind("button.time + 'ms'") ease-in-out transform;
     transform: rotateX(v-bind("button.rx + 'deg'")) rotateY(v-bind("button.ry + 'deg'")) rotateZ(v-bind("button.rz + 'deg'"));
-    animation: 3000ms cubic-bezier(0.2, 0, 0.6, 1) v-bind("button.state == 'spin' ? 'menu-play-button-spin' : ''");
+    animation: 2500ms cubic-bezier(0.2, 0, 0.6, 1) v-bind("button.state == 'spin' ? 'menu-play-button-spin' : ''");
     animation-delay: 150ms;
     animation-fill-mode: forwards;
     user-select: none;

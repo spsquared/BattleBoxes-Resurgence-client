@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import GameView from './game/GameView.vue';
+import GameSelectView from './game/GameSelectView.vue';
 import MenuView from './menu/MenuView.vue';
 import LoginView from './login/LoginView.vue';
+import FadeTransition from './menu/FadeTransition.vue';
 import FullscreenModal from './components/modal/FullscreenModal.vue';
 import { modal } from './components/modal';
 
@@ -15,8 +17,10 @@ watch(() => modalComponent.value, () => {
 
 <template>
     <GameView></GameView>
+    <GameSelectView></GameSelectView>
     <MenuView></MenuView>
     <LoginView></LoginView>
+    <FadeTransition></FadeTransition>
     <FullscreenModal ref="modalComponent"></FullscreenModal>
 </template>
 

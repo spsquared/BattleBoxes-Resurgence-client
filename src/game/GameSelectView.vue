@@ -4,13 +4,13 @@ import { currentPage } from '@/menu/nav';
 
 <template>
     <Transition>
-        <div class="gameView" v-if="currentPage == 'game'">
+        <div class="gameSelectView" v-if="currentPage == 'gameSelect'">
         </div>
     </Transition>
 </template>
 
 <style scoped>
-.gameView {
+.gameSelectView {
     position: fixed;
     top: 0px;
     left: 0px;
@@ -20,6 +20,6 @@ import { currentPage } from '@/menu/nav';
     z-index: 2;
 }
 
-/* game transition fade screen */
-/* fades in and out, from game select, to menu */
+/* game select transition fade screen */
+/* only fades in, from menu, game view transitions on out */
 </style>

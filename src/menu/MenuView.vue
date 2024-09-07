@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
-import { gameInstance } from '@/game/game';
 import { httpCodeToMessage, serverFetch } from '@/server';
+import { currentPage, showFadeScreen } from '@/menu/nav';
 import * as Inputs from '@/components/inputs';
 import MenuPlayButton from './MenuPlayButton.vue';
+import { onMounted } from 'vue';
+
+onMounted(() => showFadeScreen.value = false);
 
 const logout = async () => {
     const res = await serverFetch('/logout', 'POST');
-    console.log(res)
     if (res.status == 200) window.location.reload();
     else modal.showModal({
         title: 'Unexpected error logging out',
@@ -20,10 +22,13 @@ const logout = async () => {
 
 <template>
     <Transition>
-        <div class="menuView" v-if="gameInstance === null">
+        <div class="menuView" v-if="currentPage == 'menu'">
             <div class="menuFlow">
                 <MenuPlayButton></MenuPlayButton>
-                <Inputs.TextButton text="Log Out" class="menuButton" @click="logout()"></Inputs.TextButton>
+                <div class="menuButtons">
+                    <Inputs.TextButton text="Settings" class="menuButton" background-color="dodgerBlue"></Inputs.TextButton>
+                    <Inputs.TextButton text="Log Out" class="menuButton" background-color="red" @click="logout()"></Inputs.TextButton>
+                </div>
             </div>
         </div>
     </Transition>
@@ -31,9 +36,31 @@ const logout = async () => {
 </template>
 
 <style>
-@keyframes menuTransition {
+@keyframes menu-transition-in {
+    0% {
+        display: none;
+    }
+
+    50% {
+        display: none;
+    }
+
+    100% {
+        display: block;
+    }
+}
+
+@keyframes menu-transition-out {
     0% {
         display: block;
+    }
+
+    50% {
+        display: block;
+    }
+
+    100% {
+        display: none;
     }
 }
 </style>
@@ -55,11 +82,19 @@ const logout = async () => {
     align-items: center;
     justify-content: center;
     font-size: min(5vw, 5vh);
-    row-gap: 0.8em;
     padding-top: 8vh;
 }
 
+.menuButtons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    row-gap: 0.8em;
+    margin-top: 1em;
+}
+
 .menuButton {
+    width: 100%;
     font-size: min(5vw, 4vh);
     border-width: 0.2em;
 }
@@ -81,5 +116,11 @@ const logout = async () => {
     z-index: 3;
 }
 
-/* no transition */
+.v-enter-active {
+    animation: 1000ms linear menu-transition-in;
+}
+
+.v-leave-active {
+    animation: 1000ms linear menu-transition-out;
+}
 </style>
