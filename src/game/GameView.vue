@@ -3,10 +3,8 @@ import { currentPage } from '@/menu/nav';
 </script>
 
 <template>
-    <Transition>
-        <div class="gameView" v-if="currentPage == 'game'">
-        </div>
-    </Transition>
+    <div class="gameView" v-if="currentPage == 'game'">
+    </div>
 </template>
 
 <style scoped>
@@ -19,7 +17,4 @@ import { currentPage } from '@/menu/nav';
     background-color: transparent;
     z-index: 2;
 }
-
-/* game transition fade screen */
-/* fades in and out, from game select, to menu */
 </style>

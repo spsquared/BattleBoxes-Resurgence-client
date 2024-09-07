@@ -42,7 +42,7 @@ body {
     z-index: 1;
 }
 
-* {
+:root {
     --font-12: max(8px, min(12px, 3vw, 6vh));
     --font-16: max(10px, min(16px, 4vw, 8vh));
     --font-18: max(10px, min(18px, 4vw, 9vh));

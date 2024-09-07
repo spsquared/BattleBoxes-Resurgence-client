@@ -1,7 +1,7 @@
 // communications with the server
 
 import { io, Socket } from "socket.io-client";
-import { reactive, ref } from "vue";
+import { reactive } from "vue";
 
 export const serverHostname = process.env.NODE_ENV == 'production' ? '' : 'https://localhost:9000';
 

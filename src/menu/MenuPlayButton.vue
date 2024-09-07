@@ -21,7 +21,7 @@ const button = reactive<{
     dy: 0,
     dz: 0,
     sc: 1,
-    time: 1000,
+    time: 3000,
     state: 'bob',
     bobStage: -1
 });
@@ -57,8 +57,7 @@ const updateBobAnimation = () => {
         button.dx = currState.d[0];
         button.dy = currState.d[1];
         button.dz = currState.d[2];
-        button.time = 3000;
-    }, 1000);
+    }, 1500);
     button.rx = currState.r[0];
     button.ry = currState.r[1];
     button.rz = currState.r[2];
@@ -90,9 +89,11 @@ const mouseenter = () => {
 const mouseleave = () => {
     if (button.state == 'hover') {
         button.state = 'bob';
+        button.dz = 0;
+        button.sc = 1;
         updateBobAnimation();
-        button.sc = 1.05;
         updatePopAnimation();
+        setTimeout(() => button.time = 3000, 500);
     }
 };
 const mousedown = () => {

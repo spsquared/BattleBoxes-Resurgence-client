@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
-import { httpCodeToMessage, serverFetch } from '@/server';
+import { connectionState, httpCodeToMessage, serverFetch } from '@/server';
 import { currentPage, showFadeScreen } from '@/menu/nav';
 import * as Inputs from '@/components/inputs';
 import MenuPlayButton from './MenuPlayButton.vue';
-import { onMounted } from 'vue';
+import { watch } from 'vue';
 
-onMounted(() => showFadeScreen.value = false);
+watch(currentPage, (p) => {
+    if (p == 'menu') showFadeScreen.value = false;
+});
+
+// delete this later, just set a ref to true
+const settingsnowork = () => {
+    modal.showModal({ title: 'oof', content: 'lol that doesn\'t do anything'})
+}
 
 const logout = async () => {
     const res = await serverFetch('/logout', 'POST');
@@ -21,49 +28,18 @@ const logout = async () => {
 </script>
 
 <template>
-    <Transition>
-        <div class="menuView" v-if="currentPage == 'menu'">
-            <div class="menuFlow">
-                <MenuPlayButton></MenuPlayButton>
-                <div class="menuButtons">
-                    <Inputs.TextButton text="Settings" class="menuButton" background-color="dodgerBlue"></Inputs.TextButton>
-                    <Inputs.TextButton text="Log Out" class="menuButton" background-color="red" @click="logout()"></Inputs.TextButton>
-                </div>
+    <div class="menuView" v-if="currentPage == 'menu'">
+        <div class="menuFlow">
+            <MenuPlayButton></MenuPlayButton>
+            <div class="menuButtons">
+                <Inputs.TextButton text="Settings" title="Settings" @click="settingsnowork()" class="menuButton" background-color="dodgerBlue"></Inputs.TextButton>
+                <Inputs.TextButton text="Log Out" title="Log Out" @click="logout()" class="menuButton" background-color="red"></Inputs.TextButton>
             </div>
         </div>
-    </Transition>
-    <a class="copyrightNotice" href="https://www.gnu.org/licenses/gpl-3.0-standalone.html" target="_blank">Copyright &copy; 2024 Sampleprovider(sp)</a>
+    </div>
+    <a class="copyrightNotice" href="https://www.gnu.org/licenses/gpl-3.0-standalone.html" target="_blank" v-if="currentPage == 'menu' || !connectionState.loggedIn">Copyright &copy; 2024 Sampleprovider(sp)</a>
 </template>
 
-<style>
-@keyframes menu-transition-in {
-    0% {
-        display: none;
-    }
-
-    50% {
-        display: none;
-    }
-
-    100% {
-        display: block;
-    }
-}
-
-@keyframes menu-transition-out {
-    0% {
-        display: block;
-    }
-
-    50% {
-        display: block;
-    }
-
-    100% {
-        display: none;
-    }
-}
-</style>
 <style scoped>
 .menuView {
     display: block;
@@ -77,34 +53,36 @@ const logout = async () => {
 }
 
 .menuFlow {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: 1fr min-content;
+    height: 100vh;
     align-items: center;
     justify-content: center;
     font-size: min(5vw, 5vh);
-    padding-top: 8vh;
 }
 
 .menuButtons {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     row-gap: 0.8em;
-    margin-top: 1em;
+    margin-bottom: 1em;
 }
 
 .menuButton {
     width: 100%;
     font-size: min(5vw, 4vh);
     border-width: 0.2em;
+    transition-duration: 100ms;
 }
 
 .menuButton:hover {
-    transform: translateY(-0.1em);
+    transform: translateY(-0.2em);
 }
 
 .menuButton:active {
-    transform: translateY(0.1em);
+    transform: translateY(0.2em);
 }
 
 .copyrightNotice {
@@ -114,13 +92,5 @@ const logout = async () => {
     color: black;
     opacity: 1;
     z-index: 3;
-}
-
-.v-enter-active {
-    animation: 1000ms linear menu-transition-in;
-}
-
-.v-leave-active {
-    animation: 1000ms linear menu-transition-out;
 }
 </style>

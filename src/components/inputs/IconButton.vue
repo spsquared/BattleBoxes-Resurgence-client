@@ -13,6 +13,7 @@ defineProps<{
     imgColor?: string
     imgHoverColor?: string
     imgOnly?: boolean
+    type?: 'button' | 'submit'
     disabled?: boolean
     glitchOnMount?: boolean
 }>();
@@ -26,7 +27,7 @@ function click() {
 
 <template>
     <label :class="'uiIconButtonLabel ' + ($props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title=title>
-        <input type="button" class="uiIconButton" @click=click :disabled=$props.disabled>
+        <input :type="$props.type ?? 'button'" class="uiIconButton" @click=click :disabled=$props.disabled>
         <div :class="$props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
         <span class="uiIconButtonText" v-if="!$props.imgOnly">{{ $props.text }}</span>
     </label>
@@ -40,7 +41,7 @@ function click() {
     height: v-bind("$props.height ?? 'min-content'");
     border: 4px solid black;
     margin: 0px 4px;
-    padding: 0.125em 0.4em;
+    padding: v-bind("$props.imgOnly ? '0.125em 0.125em' : '0.125em 0.4em'");
     background-color: v-bind("$props.backgroundColor ?? 'white'");
     color: v-bind("$props.color ?? 'black'");
     font: v-bind("$props.font ?? 'inherit'");

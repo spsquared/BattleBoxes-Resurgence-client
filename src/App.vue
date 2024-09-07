@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import GameView from './game/GameView.vue';
-import GameSelectView from './game/GameSelectView.vue';
+import GameSelectView from './gameSelect/GameSelectView.vue';
 import MenuView from './menu/MenuView.vue';
 import LoginView from './login/LoginView.vue';
 import FadeTransition from './menu/FadeTransition.vue';
