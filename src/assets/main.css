@@ -3,6 +3,7 @@
     font-weight: normal;
     font-style: normal;
     src: url(./miniset2.woff) format(woff), url(./miniset2.woff2) format(woff2);
+    font-display: swap;
 }
 
 body {
