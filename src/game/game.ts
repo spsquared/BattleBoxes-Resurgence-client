@@ -3,10 +3,22 @@
 import '@/game/renderer';
 import '@/game/sound';
 import '@/game/entity';
-import { ref } from 'vue';
 
-export const gameInstance = ref<GameInstance | null>(null);
+
+import { Socket } from 'socket.io-client';
+import { createNamespacedSocket } from '@/server';
+import { ref } from 'vue';
+import { startTransitionTo } from '@/menu/nav';
+
+export const gameInstance = ref<GameInstance>();
 
 export class GameInstance {
-    
+    readonly id: string;
+    readonly socket: Socket;
+
+    constructor(id: string, authCode: string) {
+        this.id = id;
+        this.socket = createNamespacedSocket(id, authCode);
+        this.socket.on('join', () => startTransitionTo('game'));
+    }
 }

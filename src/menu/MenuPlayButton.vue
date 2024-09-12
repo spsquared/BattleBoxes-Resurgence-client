@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { startTransitionTo } from '@/menu/nav';
+import { checkConnection } from '@/server';
 import { reactive } from 'vue';
 
 const button = reactive<{
@@ -71,6 +72,7 @@ const updatePopAnimation = () => {
 }
 updatePopAnimation();
 
+let timeResetTimeout: NodeJS.Timeout | undefined = undefined;
 const mouseenter = () => {
     if (button.state == 'bob') {
         button.state = 'hover';
@@ -83,6 +85,7 @@ const mouseenter = () => {
         button.rx = 5;
         button.ry = 6;
         button.rz = -3;
+        if (timeResetTimeout !== undefined) clearTimeout(timeResetTimeout);
         updatePopAnimation();
     }
 };
@@ -93,7 +96,8 @@ const mouseleave = () => {
         button.sc = 1;
         updateBobAnimation();
         updatePopAnimation();
-        setTimeout(() => button.time = 3000, 500);
+        if (timeResetTimeout !== undefined) clearTimeout(timeResetTimeout);
+        timeResetTimeout = setTimeout(() => button.time = 3000, 500);
     }
 };
 const mousedown = () => {
@@ -128,7 +132,8 @@ const mouseup = () => {
         button.rz = 0;
         button.sc = 1;
         button.time = 250;
-        setTimeout(() => startTransitionTo('gameSelect'), 1000);
+        setTimeout(() => startTransitionTo('gameSelect'), 1500);
+        checkConnection();
     }
 };
 

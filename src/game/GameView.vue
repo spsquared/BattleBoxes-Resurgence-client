@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { currentPage } from '@/menu/nav';
 </script>
 
 <template>
-    <div class="gameView" v-if="currentPage == 'game'">
+    <div class="gameView">
     </div>
 </template>
 

@@ -5,6 +5,7 @@ import * as Inputs from '@/components/inputs';
 import { ref } from 'vue';
 import { modal } from '@/components/modal';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
+import { executeRecaptcha } from './recaptcha';
 
 const waitForLogin = ref(false);
 const username = ref('');
@@ -25,8 +26,9 @@ const checkValidity = (): boolean => {
 const login = async () => {
     if (!checkValidity()) return;
     waitForLogin.value = true;
+    const token = await executeRecaptcha('login');
     const loginUsername = username.value;
-    const res = await serverFetch('/login', 'POST', { username: loginUsername, password: password.value });
+    const res = await serverFetch('/login', 'POST', { username: loginUsername, password: password.value, captcha: token });
     if (res.status == 200) {
         connectionState.loggedIn = true;
         connectionState.username = loginUsername;
@@ -40,8 +42,9 @@ const login = async () => {
 const signup = async () => {
     if (!checkValidity()) return;
     waitForLogin.value = true;
+    const token = await executeRecaptcha('signup');
     const signupUsername = username.value;
-    const res = await serverFetch('/signup', 'POST', { username: signupUsername, password: password.value });
+    const res = await serverFetch('/signup', 'POST', { username: signupUsername, password: password.value, captcha: token });
     if (res.status == 200) {
         connectionState.loggedIn = true;
         connectionState.username = signupUsername;

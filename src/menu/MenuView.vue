@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
-import { connectionState, httpCodeToMessage, serverFetch } from '@/server';
-import { currentPage, showFadeScreen } from '@/menu/nav';
+import { httpCodeToMessage, serverFetch } from '@/server';
+import { showFadeScreen } from '@/menu/nav';
 import * as Inputs from '@/components/inputs';
 import MenuPlayButton from './MenuPlayButton.vue';
-import { watch } from 'vue';
+import { onMounted } from 'vue';
 
-watch(currentPage, (p) => {
-    if (p == 'menu') showFadeScreen.value = false;
-});
+onMounted(() => showFadeScreen.value = false);
 
 // delete this later, just set a ref to true
 const settingsnowork = () => {
@@ -28,7 +26,7 @@ const logout = async () => {
 </script>
 
 <template>
-    <div class="menuView" v-if="currentPage == 'menu'">
+    <div class="menuView">
         <div class="menuFlow">
             <MenuPlayButton></MenuPlayButton>
             <div class="menuButtons">
@@ -37,7 +35,6 @@ const logout = async () => {
             </div>
         </div>
     </div>
-    <a class="copyrightNotice" href="https://www.gnu.org/licenses/gpl-3.0-standalone.html" target="_blank" v-if="currentPage == 'menu' || !connectionState.loggedIn">Copyright &copy; 2024 Sampleprovider(sp)</a>
 </template>
 
 <style scoped>
@@ -83,14 +80,5 @@ const logout = async () => {
 
 .menuButton:active {
     transform: translateY(0.2em);
-}
-
-.copyrightNotice {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    color: black;
-    opacity: 1;
-    z-index: 3;
 }
 </style>

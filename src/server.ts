@@ -1,16 +1,18 @@
 // communications with the server
 
-import { io, Socket } from "socket.io-client";
-import { reactive } from "vue";
+import { io, Socket } from 'socket.io-client';
+import { reactive } from 'vue';
 
 export const serverHostname = process.env.NODE_ENV == 'production' ? '' : 'https://localhost:9000';
 
 export const createNamespacedSocket = (namespace: string, auth?: string): Socket => {
     return io(`${serverHostname}/${namespace}`, {
+        path: '/game-socketio',
         auth: {
             token: auth
         },
-        withCredentials: true
+        withCredentials: true,
+        reconnection: false
     });
 };
 
@@ -49,22 +51,24 @@ export const httpCodeToMessage = (code: number, item?: string): string => {
         case 404: return `${item ?? 'Item'} does not exist`;
         case 403: return 'Incorrect credentials';
         case 500: return 'Internal error';
-        case 400: return `Malformed request (is this a bug?)`;
-        case 401: return `Not logged in`;
+        case 400: return 'Malformed request (is this a bug?)';
+        case 401: return 'Not logged in';
+        case 422: return 'ReCAPTCHA check failed';
+        case 429: return 'Too many requests';
         case 0: return 'Fetch failed (are you connected to the internet?)';
         default: return `Unknown response: HTTP code ${code} (is this a bug?)`;
     }
 };
 
-const attemptConnect = async () => {
+export const checkConnection = async () => {
     const res = await serverFetch('/loginTest');
-    if (res.ok) connectionState.loggedIn = true;
+    connectionState.loggedIn = res.ok;
     if (res.status == 0) {
         connectionState.connectionFailed = true;
-        setTimeout(attemptConnect, 5000);
+        setTimeout(checkConnection, 5000);
     } else {
         connectionState.connected = true;
         connectionState.connectionFailed = false;
     }
 };
-window.addEventListener('load', attemptConnect);
+window.addEventListener('load', checkConnection);

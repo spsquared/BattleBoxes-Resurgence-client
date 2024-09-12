@@ -7,13 +7,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- need to add domains later -->
     <meta http-equiv="Content-Security-Policy" content="
-        default-src 'self' 'unsafe-eval' 'unsafe-inline';
-        script-src 'self' 'unsafe-eval' 'unsafe-inline';
-        script-src-elem 'self' 'unsafe-eval' 'unsafe-inline';
+        default-src 'self';
+        script-src 'self' https://www.google.com;
+        script-src-elem 'self' https://www.google.com https://www.gstatic.com;
+        style-src 'self' 'unsafe-inline';
         img-src 'self' https://raw.githubusercontent.com/spsquared/;
         font-src 'self' data:;
-        frame-src 'self' 'unsafe-eval' 'unsafe-inline';
-        connect-src 'self' https://localhost:* wss://localhost:* 'unsafe-eval' 'unsafe-inline';
+        frame-src 'self'  https://www.google.com;
+        connect-src 'self' https://localhost:* wss://localhost:*;
         ">
     <meta name="title" content="BattleBoxes Resurgence">
     <meta name="description" content="AI plays a de-spaghettified BattleBoxes Multiplayer">
@@ -104,33 +105,7 @@
                 }
             }
         </style>
-        <script>
-            let canLoad = true;
-            const loadingCover = document.getElementById('loadingCover');
-            const loadingError = document.getElementById('loadingError');
-            const errorListener = (err) => {
-                loadingError.innerText += `\n${err.message} (at ${err.filename} ${err.lineno}:${err.colno})`;
-                loadingCover.style.opacity = 1;
-                canLoad = false;
-            };
-            document.addEventListener('DOMContentLoaded', async (e) => {
-                loadingCover.style.opacity = 0;
-                loadingCover.style.pointerEvents = 'none';
-                await Promise.all([
-                    new Promise((resolve) => window.addEventListener('load', resolve)),
-                    new Promise((resolve) => setTimeout(resolve, 200))
-                ]);
-                if (!canLoad) {
-                    loadingCover.style.opacity = 1;
-                    loadingCover.style.pointerEvents = '';
-                    return;
-                }
-                loadingCover.remove();
-                window.removeEventListener('error', errorListener);
-                if (document.getElementById('pageRoot').children.length == 0) window.location.reload();
-            });
-            window.addEventListener('error', errorListener);
-        </script>
+        <script src="/loadingCover.js"></script>
     </div>
     <script type="module" src="/src/main.ts"></script>
 </body>
