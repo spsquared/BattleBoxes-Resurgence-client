@@ -9,6 +9,7 @@ import { Socket } from 'socket.io-client';
 import { createNamespacedSocket } from '@/server';
 import { ref } from 'vue';
 import { startTransitionTo } from '@/menu/nav';
+import RenderingEngine, { type CanvasLayerDescriptors } from '@/game/renderer';
 
 export const gameInstance = ref<GameInstance>();
 
@@ -29,3 +30,45 @@ export class GameInstance {
         });
     }
 }
+
+const canvasRoot = document.getElementById('canvasRoot');
+if (canvasRoot === null) throw new Error('Canvas root was not found');
+Array.from(canvasRoot.childNodes).forEach((node) => canvasRoot.removeChild(node));
+const canvas = document.createElement('canvas');
+canvasRoot.appendChild(canvas);
+
+type TestLayers = [
+    {
+        type: 'direct',
+        textures: []
+    },
+    {
+        type: 'offscreen',
+        textures: [ImageBitmap, ImageBitmap]
+    },
+    {
+        type: 'webgl',
+        textures: []
+    }
+];
+
+export const renderer = new RenderingEngine<TestLayers>(canvas, [
+    {
+        type: 'direct',
+        textures: []
+    },
+    {
+        type: 'offscreen',
+        textures: [new ImageBitmap(), new ImageBitmap()]
+    },
+    {
+        type: 'webgl',
+        textures: []
+    }
+]);
+
+renderer.sendFrame([
+    [],
+    [],
+    []
+])

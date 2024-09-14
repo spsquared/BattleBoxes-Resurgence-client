@@ -15,7 +15,7 @@ export abstract class RectangleRenderable {
 }
 
 export abstract class TexturedRenderable extends RectangleRenderable {
-    abstract readonly texture: ImageBitmap;
+    abstract readonly texture: number;
 }
 
 
@@ -29,114 +29,152 @@ export abstract class WebGLRectangleRenderable {
 }
 
 export abstract class WebGLTexturedRenderable extends WebGLRectangleRenderable {
-    abstract readonly texture: ImageBitmap;
+    abstract readonly texture: number;
 }
 
 export class RenderingEngineError extends Error {
     name: string = 'RenderingEngineError';
 }
 
-const canvasRoot = document.getElementById('canvasRoot');
-if (canvasRoot === null) throw new RenderingEngineError('Canvas root was not found');
-Array.from(canvasRoot.childNodes).forEach((node) => canvasRoot.removeChild(node));
-const canvas = document.createElement('canvas');
-const canvas2dContext = canvas.getContext('2d');
-if (canvas2dContext === null) throw new RenderingEngineError('2d rendering context not supported');
-const ctx = canvas2dContext; // stops eslint weirdness
+export type CanvasLayerDescriptors = {
+    type: 'direct' | 'offscreen' | 'webgl' | 'webgl3d',
+    textures: ImageBitmap[]
+}[];
 
-const updateResolution = () => {
-    for (const layer of config.layers) {
-        if (layer.canvas != canvas) {
-            layer.canvas.width = window.innerWidth;
-            layer.canvas.height = window.innerHeight;
-        }
+export type CanvasLayers<Descriptors extends CanvasLayerDescriptors> = {
+    [Index in keyof Descriptors]: {
+        type: Descriptors[Index]['type'] & 'direct'
+        canvas: HTMLCanvasElement
+        ctx: CanvasRenderingContext2D
+    } | {
+        type: Descriptors[Index]['type'] & 'offscreen'
+        canvas: OffscreenCanvas
+        ctx: OffscreenCanvasRenderingContext2D
+    } | {
+        type: Descriptors[Index]['type'] & 'webgl'
+        canvas: OffscreenCanvas
+        ctx: WebGL2RenderingContext
+    } | {
+        type: Descriptors[Index]['type'] & 'webgl3d'
+        canvas: OffscreenCanvas
+        ctx: WebGL2RenderingContext
     }
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
 };
 
-interface CanvasLayer<Canvas, Context> {
-    readonly canvas: Canvas,
-    readonly ctx: Context
+export type LayeredEntities<Descriptors extends CanvasLayerDescriptors> = {
+    [Index in keyof Descriptors]: (Descriptors[Index]['type'] & 'direct') extends never ? ((Descriptors[Index]['type'] & 'offscreen') extends never ? ((Descriptors[Index]['type'] & 'webgl') extends never ? (never[]) : WebGLRectangleRenderable[]) : (CustomRenderable | RectangleRenderable)[]) : RectangleRenderable[]
 }
 
-// export interface CanvasLayerDescriptor
+export default class RenderingEngine<LayerDescriptors extends CanvasLayerDescriptors> {
+    private readonly canvas: HTMLCanvasElement;
 
-const config: {
-    framerate: number
-    layers: (CanvasLayer<HTMLCanvasElement, CanvasRenderingContext2D> | CanvasLayer<OffscreenCanvas, OffscreenCanvasRenderingContext2D> | CanvasLayer<OffscreenCanvas, WebGL2RenderingContext>)[]
-} = {
-    framerate: 60,
-    layers: []
-};
+    private fr: number = 60;
+    private readonly layers: CanvasLayers<LayerDescriptors>;
+    private drawing: boolean = true;
 
-export default class RenderingEngine {
-    static set framerate(fr: number) {
-        if (this.framerate < 0) throw new RenderingEngineError('Framerate cannot be negative');
-        config.framerate = fr;
-    }
-    static get framerate(): number {
-        return config.framerate;
-    }
-
-    static setLayers(layers: ('direct' | 'offscreen2d' | 'webgl2')[]): void {
-        config.layers = [];
+    constructor(canvas: HTMLCanvasElement, layers: LayerDescriptors) {
+        this.canvas = canvas;
         for (const layer of layers) {
-            if (layer == 'direct') {
-                config.layers.push({ canvas: canvas, ctx: ctx });
-            } else if (layer == 'offscreen2d') {
-                const offscreenCanvas = new OffscreenCanvas(window.innerWidth, window.innerHeight);
-                const offscreenCanvas2dContext = offscreenCanvas.getContext('2d');
-                if (offscreenCanvas2dContext === null) throw new RenderingEngineError('2d rendering context offscreen not supported');
-                config.layers.push({ canvas: offscreenCanvas, ctx: offscreenCanvas2dContext });
-            } else {
-                const offscreenCanvas = new OffscreenCanvas(window.innerWidth, window.innerHeight);
-                const offscreenCanvasWebglContext = offscreenCanvas.getContext('webgl2');
-                if (offscreenCanvasWebglContext === null) throw new RenderingEngineError('WebGL2 rendering context offscreen not supported');
-                config.layers.push({ canvas: offscreenCanvas, ctx: offscreenCanvasWebglContext });
-                throw new RenderingEngineError('WebGL rendering not implemented');
-                // TODO: create and compile shaders
-            }
+            layer.type
         }
-        updateResolution();
+        this.layers = layers.map((layer) => {
+            const canvas = layer.type == 'direct' ? this.canvas : new OffscreenCanvas(window.innerWidth, window.innerHeight);
+            const ctx = (layer.type == 'direct' || layer.type == 'offscreen') ? canvas.getContext('2d') : canvas.getContext('webgl2');
+            if (ctx === null) throw new RenderingEngineError(`${(layer.type == 'direct' || layer.type == 'offscreen') ? 'Canvas' : 'WebGL2'} context is not supported`);
+            return {
+                type: layer.type,
+                canvas: canvas,
+                ctx: ctx
+            };
+        }) as CanvasLayers<LayerDescriptors>;
+
+        // start draw loop
+        const startDraw = async () => {
+            while (this.drawing) {
+                await new Promise<void>((resolve) => {
+                    window.requestAnimationFrame(async () => {
+                        await this.drawFrame();
+                        resolve();
+                    });
+                });
+            }
+        };
+        startDraw();
+        window.addEventListener('resize', () => this.updateResolution(), { passive: true });
+        window.addEventListener('load', () => this.updateResolution());
     }
 
-    static sendFrame(layers: (CustomRenderable[] | RectangleRenderable[] | WebGLRectangleRenderable[])[]): void {
-        if (layers.length != config.layers.length) throw new RenderingEngineError('Mismatched rendering layers: layer count mismatched');
-        for (const i in config.layers) {
-            const canvas = config.layers[i].canvas;
-            const ctx = config.layers[i].ctx;
-            const entities = layers[i];
-            if (ctx instanceof CanvasRenderingContext2D) {
-                const rectangles = entities.filter((entity) => entity instanceof RectangleRenderable);
-                const customEntities = entities.filter((entity) => entity instanceof CustomRenderable);
-                if (rectangles.length + customEntities.length != entities.length) console.warn(new RenderingEngineError('Invalid entities present in "direct" layer, these will not be drawn!'));
-            } else if (ctx instanceof OffscreenCanvasRenderingContext2D) {
-                const rectangles = entities.filter((entity) => entity instanceof RectangleRenderable);
-                if (rectangles.length != entities.length) console.warn(new RenderingEngineError('Invalid entities present in "offscreen2d" layer, these will not be drawn!'));
-            } else if (ctx instanceof WebGL2RenderingContext) {
-                throw new RenderingEngineError('WebGL rendering not implemented');
-                const rectangles = entities.filter((entity) => entity instanceof WebGLRectangleRenderable);
+    set framerate(fr: number) {
+        if (fr < 0) throw new RenderingEngineError('Framerate cannot be negative');
+        this.fr = fr;
+    }
+    get framerate(): number {
+        return this.fr;
+    }
+
+    sendFrame(entities: LayeredEntities<LayerDescriptors>) {
+        console.log(entities);
+    }
+
+    // setLayers(layers: ('direct' | 'offscreen2d' | 'webgl2')[]): void {
+    //     this.layers.length = 0;
+    //     for (const layer of layers) {
+    //         if (layer == 'direct') {
+    //             config.layers.push({ canvas: canvas, ctx: ctx });
+    //         } else if (layer == 'offscreen2d') {
+    //             const offscreenCanvas = new OffscreenCanvas(window.innerWidth, window.innerHeight);
+    //             const offscreenCanvas2dContext = offscreenCanvas.getContext('2d');
+    //             if (offscreenCanvas2dContext === null) throw new RenderingEngineError('2d rendering context offscreen not supported');
+    //             config.layers.push({ canvas: offscreenCanvas, ctx: offscreenCanvas2dContext });
+    //         } else {
+    //             const offscreenCanvas = new OffscreenCanvas(window.innerWidth, window.innerHeight);
+    //             const offscreenCanvasWebglContext = offscreenCanvas.getContext('webgl2');
+    //             if (offscreenCanvasWebglContext === null) throw new RenderingEngineError('WebGL2 rendering context offscreen not supported');
+    //             config.layers.push({ canvas: offscreenCanvas, ctx: offscreenCanvasWebglContext });
+    //             throw new RenderingEngineError('WebGL rendering not implemented');
+    //             // TODO: create and compile shaders
+    //         }
+    //     }
+    //     updateResolution();
+    // }
+
+    // // yeet this
+    // sendFrame(layers: (CustomRenderable[] | RectangleRenderable[] | WebGLRectangleRenderable[])[]): void {
+    //     if (layers.length != config.layers.length) throw new RenderingEngineError('Mismatched rendering layers: layer count mismatched');
+    //     for (const i in config.layers) {
+    //         const canvas = config.layers[i].canvas;
+    //         const ctx = config.layers[i].ctx;
+    //         const entities = layers[i];
+    //         if (ctx instanceof CanvasRenderingContext2D) {
+    //             const rectangles = entities.filter((entity) => entity instanceof RectangleRenderable);
+    //             const customEntities = entities.filter((entity) => entity instanceof CustomRenderable);
+    //             if (rectangles.length + customEntities.length != entities.length) console.warn(new RenderingEngineError('Invalid entities present in "direct" layer, these will not be drawn!'));
+    //         } else if (ctx instanceof OffscreenCanvasRenderingContext2D) {
+    //             const rectangles = entities.filter((entity) => entity instanceof RectangleRenderable);
+    //             if (rectangles.length != entities.length) console.warn(new RenderingEngineError('Invalid entities present in "offscreen2d" layer, these will not be drawn!'));
+    //         } else if (ctx instanceof WebGL2RenderingContext) {
+    //             throw new RenderingEngineError('WebGL rendering not implemented');
+    //             const rectangles = entities.filter((entity) => entity instanceof WebGLRectangleRenderable);
+    //         }
+    //     }
+    // }
+
+    private drawFrame() {
+
+    }
+
+    private updateResolution() {
+        for (const layer of this.layers) {
+            if (layer.canvas != this.canvas) {
+                layer.canvas.width = window.innerWidth;
+                layer.canvas.height = window.innerHeight;
             }
         }
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    }
+
+    stop() {
+        this.drawing = false;
     }
 }
-
-canvasRoot.appendChild(canvas);
-
-const drawFrame = async () => {
-};
-const startDraw = async () => {
-    while (true) {
-        await new Promise<void>((resolve) => {
-            window.requestAnimationFrame(async () => {
-                await drawFrame();
-                resolve();
-            });
-        });
-    }
-};
-window.addEventListener('load', startDraw);
-
-window.addEventListener('resize', () => updateResolution(), { passive: true });
-window.addEventListener('load', () => updateResolution());
