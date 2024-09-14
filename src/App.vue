@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { currentPage } from './menu/nav';
 import { connectionState } from './server';
 import GameView from './game/GameView.vue';
@@ -9,6 +9,7 @@ import LoginView from './login/LoginView.vue';
 import FadeTransition from './menu/FadeTransition.vue';
 import FullscreenModal, { ModalMode } from './components/modal/FullscreenModal.vue';
 import { modal } from './components/modal';
+import { hideRecaptcha } from './login/recaptcha';
 
 const modalComponent = ref<InstanceType<typeof FullscreenModal>>();
 
@@ -23,6 +24,8 @@ watch(() => connectionState.loggedIn, () => {
         mode: ModalMode.CONFIRM
     }).result.then(() => window.location.reload());
 });
+
+onMounted(() => hideRecaptcha());
 </script>
 
 <template>

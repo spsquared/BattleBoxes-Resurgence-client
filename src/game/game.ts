@@ -15,10 +15,17 @@ export const gameInstance = ref<GameInstance>();
 export class GameInstance {
     readonly id: string;
     readonly socket: Socket;
+    readonly loadPromise: Promise<void>;
+    private assetsLoaded: boolean = false;
 
     constructor(id: string, authCode: string) {
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
         this.socket.on('join', () => startTransitionTo('game'));
+        this.loadPromise = new Promise((resolve) => {
+            // idk load the game or sometihng
+            resolve();
+            this.assetsLoaded = true;
+        });
     }
 }

@@ -1,4 +1,14 @@
 <script setup lang="ts">
+import { onMounted, watch } from 'vue';
+import { gameInstance } from './game';
+import { showFadeScreen } from '@/menu/nav';
+
+onMounted(() => {
+    gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+});
+watch(gameInstance, () => {
+    gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+});
 </script>
 
 <template>

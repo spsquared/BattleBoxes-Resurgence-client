@@ -12,6 +12,7 @@ module.exports = {
     ecmaVersion: 'latest'
   },
   rules: {
-    "no-async-promise-executor": "off"
+    "no-async-promise-executor": "off",
+    "no-constant-condition": "off"
   }
 }

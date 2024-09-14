@@ -35,6 +35,14 @@ body {
     z-index: 0;
 }
 
+#canvasRoot>canvas {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
+}
+
 #pageRoot {
     position: fixed;
     top: 0px;
