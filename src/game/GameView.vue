@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue';
+import './game';
 import { gameInstance } from './game';
 import { showFadeScreen } from '@/menu/nav';
 
