@@ -28,38 +28,79 @@ export abstract class CustomReadRenderable {
  * A simple entity that takes the form of a centered rectangle.
  */
 export abstract class RectangleRenderable {
-    /**X coordinate */
+    /**X coordinate of center */
     abstract readonly x: number;
+    /**Y coordinate of center */
     abstract readonly y: number;
+    /**Width */
     abstract readonly width: number;
+    /**Height */
     abstract readonly height: number;
+    /**Angle in radians rotating counterclockwise */
     abstract readonly angle: number;
+    /**Fill color */
     abstract readonly color: string;
 }
 
 /**
- * 
+ * A simple entity that takes the form of some centered text.
  */
 export abstract class TextRenderable {
+    /**X coordinate of center */
     abstract readonly x: number;
+    /**Y coordinate of center */
     abstract readonly y: number;
+    /**Font size in pixels */
     abstract readonly size: number;
+    /**Angle in radians rotating counterclockwise */
     abstract readonly angle: number;
+    /**Color of text */
     abstract readonly color: string;
+    /**Text string */
     abstract readonly text: string;
 }
 
+/**
+ * A `RectangleRenderable` with a textured face instead of a solid fill.
+ */
 export abstract class TexturedRenderable extends RectangleRenderable {
+    /**Texture index of the layer, cropped area will be scaled to fit size */
     abstract readonly texture: number;
+    /**Shift in texture pixels along the texture's X axis */
     abstract readonly shiftx: number;
+    /**Shift in texture pixels along the texture's Y axis */
     abstract readonly shifty: number;
+    /**Width of cropped texture area (texture spans from `shiftx` to `shiftx + cropx`) */
     abstract readonly cropx: number;
+    /**Height of cropped texture area (texture spans from `shifty` to `shifty + cropy`) */
     abstract readonly cropy: number;
 }
 
-export abstract class AnimatedTexturedRenderable extends TextRenderable {
+/**
+ * A `TexturedRenderable` that simplifies animating textures by additionally shifting the cropping area along the X axis.
+ */
+export abstract class AnimatedTexturedRenderable extends TexturedRenderable {
+    /**Amount of pixels along the X axis to shift for each frame */
     abstract readonly frameWidth: number;
+    /**The current frame number of the animation */
     abstract readonly index: number;
+}
+
+/**
+ * A complex entity that contains subcomponents (other entities) parented to it, following its transform.
+ */
+export abstract class CompositeRenderable<CustomEntity extends CustomRenderable | CustomReadRenderable> {
+    /**X coordinate of center */
+    abstract readonly x: number;
+    /**Y coordinate of center */
+    abstract readonly y: number;
+    /**Angle in radians rotating counterclockwise */
+    abstract readonly angle: number;
+    /**
+     * Subcomponents: `CustomRenderable` or `CustomReadRenderable` (depends on layer type),
+     * `RectangleRenderable`, `TextRenderable`, and subclasses
+     */
+    abstract readonly components: (CustomEntity | RectangleRenderable | TextRenderable)[]
 }
 
 export abstract class WebGLRectangleRenderable {
@@ -79,6 +120,18 @@ export class RenderEngineError extends Error {
     name: string = 'RenderEngineError';
 }
 
+/**
+ * Describes the layers of the rendering pipeline from bottom to top.
+ * 
+ * * **`2d`**: Render in 2D to a `HTMLCanvasElement`. Allows `CustomReadRenderable`, `RectangleRenderable`,
+ * `TextRenderable`, and `CompositeRenderable<CustomReadRenderable>` entities (includes subclasses like `TexturedRenderable`)
+ * 
+ * * **`offscreen2d`**: Render in 2D to an `OffscreenCanvas`. Allows `CustomRenderable`, `RectangleRenderable`,
+ * `TextRenderable`, and `CompositeRenderable<CustomRenderable>` entities (includes subclasses like `TexturedRenderable`)
+ * 
+ * * **`webgl`**: Render in 3D or 2D to an `OffscreenCanvas`. Useful for large numbers of simple entities
+ * or 3D effects
+ */
 export type RenderEngineLayerDescriptors = ('2d' | 'offscreen2d' | 'webgl')[];
 
 export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptors> = {
@@ -114,8 +167,8 @@ export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors>
 
 export type RenderEngineFrameInput<Descriptors extends RenderEngineLayerDescriptors> = {
     [Index in keyof Descriptors]:
-    [(CustomReadRenderable | RectangleRenderable | TextRenderable)[], Descriptors[Index] & '2d'][0] |
-    [(CustomRenderable | RectangleRenderable | TextRenderable)[], Descriptors[Index] & 'offscreen2d'][0] |
+    [(CustomReadRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomReadRenderable>)[], Descriptors[Index] & '2d'][0] |
+    [(CustomRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomRenderable>)[], Descriptors[Index] & 'offscreen2d'][0] |
     [(WebGLRectangleRenderable | WebGLTexturedRenderable)[], Descriptors[Index] & 'webgl'][0]
 };
 
@@ -227,6 +280,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     }
 
     private async drawFrame() {
+        if (this.frame.length != this.layers.length) return;
         const twoPi = 2 * Math.PI;
         for (let i = 0; i < this.layers.length; i++) {
             const layer = this.layers[i];
@@ -234,7 +288,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             const ctx = layer.ctx;
             const textures = layer.textures;
             if (ctx instanceof CanvasRenderingContext2D || ctx instanceof OffscreenCanvasRenderingContext2D) {
-                const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | RectangleRenderable | TextRenderable)[];
+                const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomRenderable> | CompositeRenderable<CustomReadRenderable>)[];
                 // clear canvas and save default state
                 if (layer.clear) ctx.reset();
                 else ctx.restore();
@@ -246,10 +300,22 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.save();
                 // draw custom entities separately to avoid spillover of effects
                 for (const entity of renderables) {
-                    if (ctx instanceof CanvasRenderingContext2D && entity instanceof CustomReadRenderable) {
-                        entity.draw(ctx, textures.slice());
-                    } else if (ctx instanceof OffscreenCanvasRenderingContext2D && entity instanceof CustomRenderable) {
-                        entity.draw(ctx, textures.slice());
+                    if (entity instanceof CustomReadRenderable) {
+                        entity.draw(ctx as CanvasRenderingContext2D, textures.slice());
+                    } else if (entity instanceof CustomRenderable) {
+                        entity.draw(ctx as OffscreenCanvasRenderingContext2D, textures.slice());
+                    } else if (entity instanceof CompositeRenderable) {
+                        const customComponents: (CustomRenderable | CustomReadRenderable)[] = entity.components.filter((comp) => comp instanceof CustomRenderable || comp instanceof CustomReadRenderable);
+                        if (customComponents.length != 0) {
+                            ctx.save();
+                            ctx.translate(entity.x, entity.y);
+                            ctx.rotate(entity.angle);
+                            for (const component of customComponents) {
+                                if (component instanceof CustomReadRenderable) component.draw(ctx as CanvasRenderingContext2D, textures.slice());
+                                else component.draw(ctx as OffscreenCanvasRenderingContext2D, textures.slice());
+                            }
+                            ctx.restore();
+                        }
                     }
                 }
                 // reset again to clear any accidental changes
@@ -260,7 +326,58 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 // draw all textured entities immediately, bucket everything else by color
                 for (const entity of renderables) {
                     if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
-                        continue;
+                        // already drew these
+                    } else if (entity instanceof CompositeRenderable) {
+                        // destructure the composite entity using spaghetti
+                        const cosVal = Math.cos(entity.angle);
+                        const sinVal = Math.sin(entity.angle);
+                        for (const component of entity.components) {
+                            if (component instanceof CustomRenderable || component instanceof CustomReadRenderable) {
+                                // we already drew these
+                                continue;
+                            }
+                            // BUT POSITIVE Y IS DOWN HOW FIX
+                            if (component instanceof TexturedRenderable) {
+                                // use transformed coordinates to avoid lots of canvas transforms
+                                if ((entity.angle + component.angle) % twoPi == 0) {
+                                    if (component instanceof AnimatedTexturedRenderable) {
+                                        ctx.drawImage(textures[component.texture], component.index * component.frameWidth + component.shiftx, component.shifty, component.cropx, component.cropy, entity.x + component.x - component.width / 2, entity.y + component.y - component.height / 2, component.width, component.height);
+                                    } else {
+                                        ctx.drawImage(textures[component.texture], component.shiftx, component.shifty, component.cropx, component.cropy, entity.x + component.x - component.width / 2, entity.y + component.y - component.height / 2, component.width, component.height);
+                                    }
+                                } else {
+                                    const transformedX = entity.x + component.x * cosVal - component.y * sinVal;
+                                    const transformedY = entity.y - component.x * sinVal - component.y * cosVal;
+                                    ctx.save();
+                                    ctx.translate(transformedX, transformedY);
+                                    ctx.rotate(entity.angle + component.angle);
+                                    if (component instanceof AnimatedTexturedRenderable) {
+                                        ctx.drawImage(textures[component.texture], component.index * component.frameWidth + component.shiftx, component.shifty, component.cropx, component.cropy, -component.width / 2, -component.height / 2, component.width, component.height);
+                                    } else {
+                                        ctx.drawImage(textures[component.texture], component.shiftx, component.shifty, component.cropx, component.cropy, -component.width / 2, -component.height / 2, component.width, component.height);
+                                    }
+                                    ctx.restore();
+                                }
+                            } else if (component instanceof TextRenderable || component instanceof RectangleRenderable) {
+                                // transform the coordinates when bucketing
+                                const arr = buckets.get(component.color);
+                                const transformed: TextRenderable | RectangleRenderable = {
+                                    ...component,
+                                    x: entity.x + component.x,
+                                    y: entity.y + component.y,
+                                    angle: entity.angle + component.angle
+                                };
+                                if (transformed instanceof TextRenderable) {
+                                    if (arr == undefined) buckets.set(component.color, [[], [transformed]]);
+                                    else arr[1].push(transformed);
+                                } else {
+                                    if (arr == undefined) buckets.set(component.color, [[transformed], []]);
+                                    else arr[0].push(transformed);
+                                }
+                            } else {
+                                console.warn(new RenderEngineError('Unrecognizable entity in pipeline (under CompositeRenderable), discarding!'));
+                            }
+                        }
                     } else if (entity instanceof TexturedRenderable) {
                         if (textures[entity.texture] == undefined) {
                             noTextureEntities.push(entity);
@@ -283,16 +400,16 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                 ctx.restore();
                             }
                         }
-                    } else if (entity instanceof RectangleRenderable) {
-                        const arr = buckets.get(entity.color);
-                        if (arr == undefined) buckets.set(entity.color, [[entity], []]);
-                        else arr[0].push(entity);
                     } else if (entity instanceof TextRenderable) {
                         const arr = buckets.get(entity.color);
                         if (arr == undefined) buckets.set(entity.color, [[], [entity]]);
                         else arr[1].push(entity);
+                    } else if (entity instanceof RectangleRenderable) {
+                        const arr = buckets.get(entity.color);
+                        if (arr == undefined) buckets.set(entity.color, [[entity], []]);
+                        else arr[0].push(entity);
                     } else {
-                        console.warn('Unrecognizable entity in pipeline, discarding!');
+                        console.warn(new RenderEngineError('Unrecognizable entity in pipeline, discarding!'));
                     }
                 }
                 // draw all bucketed entities

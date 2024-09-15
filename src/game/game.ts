@@ -8,7 +8,7 @@ import { Socket } from 'socket.io-client';
 import { createNamespacedSocket } from '@/server';
 import { ref, watch } from 'vue';
 import { startTransitionTo } from '@/menu/nav';
-import RenderEngine, { RectangleRenderable, TextRenderable } from '@/game/renderer';
+import RenderEngine, { CompositeRenderable, CustomRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
 
 const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
@@ -82,33 +82,53 @@ export class GameInstance {
         ]);
         this.assetsLoaded = true;
 
-        this.renderEngine.framerate = 1;
-        this.renderEngine.sendFrame([
-            [new TestBox()],
-            [],
-            [new TestText()],
-            [],
-            [new TestBox(), new TestText()]
-        ]);
+        this.renderEngine.framerate = 10;
+        let a = 0;
+        setInterval(() => {
+            this.renderEngine?.sendFrame([
+                [new TestBox(500, 200)],
+                [new SpinnyThing(a++)],
+                [new TestText()],
+                [],
+                []
+            ]);
+        }, 100);
     }
 }
 
 class TestBox extends RectangleRenderable {
-    x = 500;
-    y = 200;
+    x: number;
+    y: number;
     width = 100;
     height = 100;
     angle = -Math.PI / 3;
     color = '#0F0';
+    constructor(x: number, y: number) {
+        super();
+        this.x = x;
+        this.y = y;
+    }
 }
 
 class TestText extends TextRenderable {
     x = 500;
     y = 200;
-    angle = 0;
+    angle = -Math.PI / 3;
     text = 'Test';
     color = '#F00';
     size = 20;
+}
+
+class SpinnyThing extends CompositeRenderable<CustomRenderable> {
+    x = 400;
+    y = 5000;
+    angle: number;
+    components: (RectangleRenderable | TextRenderable | CustomRenderable)[];
+    constructor(a: number) {
+        super();
+        this.angle = a;
+        this.components = [new TestBox(-20, -20), new TestBox(20, 20)];
+    }
 }
 
 if (import.meta.env.DEV) {
