@@ -22,7 +22,9 @@ watch(() => connectionState.loggedIn, () => {
         title: 'Logged out',
         content: 'You were disconnected or logged out from the server.<br>Press OK to reload.',
         mode: ModalMode.CONFIRM
-    }).result.then(() => window.location.reload());
+    }).result.then((confirmation) => {
+        if (confirmation) window.location.reload();
+    });
 });
 
 onMounted(() => hideRecaptcha());

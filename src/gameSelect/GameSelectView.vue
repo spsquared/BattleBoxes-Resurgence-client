@@ -105,7 +105,7 @@ const createGame = async () => {
         <Transition name="paneSelect">
             <div class="paneWrapper" v-if="pane == 'select'">
                 <div class="paneFlow">
-                    <Inputs.TextButton text="Create Game" title="Create a new game" @click="pane = 'create'" style="margin: 0px;" background-color="#0C0"></Inputs.TextButton>
+                    <Inputs.TextButton text="Create Game" class="forceBorder" title="Create a new game" @click="pane = 'create'" style="margin: 0px;" background-color="#0C0" :disabled="joinGameWait"></Inputs.TextButton>
                     <div class="separatorLine">
                         <div></div>
                         <span>OR</span>
@@ -113,7 +113,7 @@ const createGame = async () => {
                     </div>
                     <form class="joinGameCodeContainer" action="javascript:void(0)">
                         <Inputs.TextBox v-model="joinCode" placeholder="Join Code" style="flex-grow: 1; text-align: center;" title="6-character join code, letters and numbers" maxlength="6" pattern="[A-Za-z0-9]{6}"></Inputs.TextBox>
-                        <Inputs.IconButton class="joinCodeButton" text="" type="submit" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(joinCode)" :disabled="!joinCodeValid"></Inputs.IconButton>
+                        <Inputs.IconButton class="joinCodeButton forceBorder" text="" type="submit" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(joinCode)" :disabled="!joinCodeValid || joinGameWait"></Inputs.IconButton>
                     </form>
                     <div class="gameListWrapper">
                         <div class="gameList">
@@ -135,7 +135,7 @@ const createGame = async () => {
                                             </span>
                                             <span>{{ entry.options.aiPlayers }} AI</span>
                                         </div>
-                                        <Inputs.IconButton class="gameEntryJoinButton" text="" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(entry.id)" :disabled="joinGameWait"></Inputs.IconButton>
+                                        <Inputs.IconButton class="gameEntryJoinButton forceBorder" text="" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(entry.id)" :disabled="joinGameWait"></Inputs.IconButton>
                                     </div>
                                 </div>
                             </TransitionGroup>
@@ -152,7 +152,7 @@ const createGame = async () => {
         <Transition name="paneCreate">
             <div class="paneWrapper" v-if="pane == 'create'">
                 <div class="paneFlow">
-                    <Inputs.TextButton text="Cancel" title="Back to game select screen" @click="pane = 'select'" style="margin: 0px;" background-color="#F00" :disabled="joinGameWait"></Inputs.TextButton>
+                    <Inputs.TextButton text="Cancel" class="forceBorder" title="Back to game select screen" @click="pane = 'select'" style="margin: 0px;" background-color="#F00" :disabled="joinGameWait"></Inputs.TextButton>
                     <div class="separatorLine">
                         <div></div>
                         <span>Create Game</span>
@@ -170,7 +170,7 @@ const createGame = async () => {
                             <Inputs.NumberBox id="opt" title="Description" width="8em"></Inputs.NumberBox> -->
                         </div>
                     </div>
-                    <Inputs.TextButton text="Create" title="Start game and go to lobby!" @click="createGame()" style="margin: 0px;" background-color="dodgerblue" :disabled="joinGameWait"></Inputs.TextButton>
+                    <Inputs.TextButton text="Create" class="forceBorder" title="Start game and go to lobby!" @click="createGame()" style="margin: 0px;" background-color="dodgerblue" :disabled="joinGameWait"></Inputs.TextButton>
                     <Transition name="wait">
                         <div class="waitCover" v-if="joinGameWait">
                             <LoadingSpinner class="waitSpinner"></LoadingSpinner>
@@ -258,6 +258,11 @@ const createGame = async () => {
     margin: 0px 6px;
 }
 
+.forceBorder,
+.forceBorder:disabled {
+    border-color: black !important;
+}
+
 .joinGameCodeContainer {
     display: flex;
     flex-direction: row;
@@ -270,7 +275,6 @@ const createGame = async () => {
 
 .joinCodeButton {
     width: calc(4 * var(--font-small));
-    border-color: black !important;
     filter: v-bind("joinCodeValid ? '' : 'grayscale(1)'");
 }
 

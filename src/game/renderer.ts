@@ -25,28 +25,27 @@ export abstract class CustomReadRenderable {
 }
 
 interface LineRenderableLinear {
-    type: 'line';
+    readonly type: 'line';
     x: number;
     y: number;
 }
 interface LineRenderableArc {
-    type: 'arc';
+    readonly type: 'arc';
     x: number;
     y: number;
     r: number;
-    // uses the coordinates of the next segment as the second control point
-    // these coordinates are the first control point
-    // also still need to call lineTo to the next set of points to close gaps
 }
 interface LineRenderableQuad {
-    type: 'quad';
+    readonly type: 'quad';
     x: number;
     y: number;
-    // uses the coordinates of the next segment as the end point
 }
 
+/**
+ * A point in a `PathRenderable` that a straight line segment is drawn to from the previous point.
+ */
 export class LinearPoint implements LineRenderableLinear {
-    type: 'line' = 'line';
+    readonly type: 'line' = 'line';
     x: number;
     y: number;
     constructor(x: number, y: number) {
@@ -54,8 +53,12 @@ export class LinearPoint implements LineRenderableLinear {
         this.y = y;
     }
 }
+/**
+ * A point in a `PathRenderable` that an arc of radius `r` is drawn to from the previous
+ * point to be tangent with the line between the next point and the control point.
+ */
 export class ArcPoint implements LineRenderableArc {
-    type: 'arc' = 'arc';
+    readonly type: 'arc' = 'arc';
     x: number;
     y: number;
     r: number;
@@ -65,8 +68,12 @@ export class ArcPoint implements LineRenderableArc {
         this.r = r;
     }
 }
+/**
+ * A point in a `PathRenderable` that serves as a control point for a quadratic to be drawn
+ * from the previous point to the next point.
+ */
 export class QuadPoint implements LineRenderableQuad {
-    type: 'quad' = 'quad';
+    readonly type: 'quad' = 'quad';
     x: number;
     y: number;
     constructor(x: number, y: number) {
@@ -91,6 +98,8 @@ export interface PathRenderable {
     join: CanvasLineJoin;
     /**Appearance of "caps" (where a segment ends) */
     cap: CanvasLineCap;
+    /**Thickness of path lines (setting this to 0 skips the line) */
+    lineWidth: number
 }
 
 export class PathRenderable {
@@ -101,6 +110,7 @@ export class PathRenderable {
         this.points = init.points ?? [new LinearPoint(0, 0), new LinearPoint(0, 0)];
         this.join = init.join ?? 'miter';
         this.cap = init.cap ?? 'butt';
+        this.lineWidth = init.lineWidth ?? 1;
     }
 }
 
@@ -118,8 +128,10 @@ export interface RectangleRenderable {
     height: number;
     /**Angle in radians rotating counterclockwise */
     angle: number;
-    /**Fill color */
+    /**Fill or stroke color */
     color: string;
+    /**Switch rendering to outline rather than fill (setting to 0 retains fill appearance, while non-zero values control outline thickness) */
+    outline: number;
 }
 
 export class RectangleRenderable {
@@ -130,6 +142,36 @@ export class RectangleRenderable {
         this.height = init.height ?? 100;
         this.angle = init.angle ?? 0;
         this.color = init.color ?? '#000000';
+        this.outline = init.outline ?? 0;
+    }
+}
+
+/**
+ * A simple entity that takes the form of a circle.
+ */
+export interface CircleRenderable {
+    /**X coordinate of center */
+    x: number;
+    /**Y coordinate of center */
+    y: number;
+    /**Exterior radius */
+    r: number;
+    /**Outline color (leaving empty disables outline) */
+    stroke: string;
+    /**Fill color (leaving empty disables fill) */
+    fill: string;
+    /**Width of outline (setting to 0 disables outline) - positive values draw outlines *inside* the radius, negative values draw outlines *outside* the radius */
+    lineWidth: number;
+}
+
+export class CircleRenderable {
+    constructor(init: Partial<CircleRenderable>) {
+        this.x = init.x ?? 0;
+        this.y = init.y ?? 0;
+        this.r = init.r ?? 50;
+        this.stroke = init.stroke ?? '#000000';
+        this.fill = init.fill ?? '#000000';
+        this.lineWidth = init.lineWidth ?? 4;
     }
 }
 
@@ -149,6 +191,8 @@ export interface TextRenderable {
     color: string;
     /**Text string */
     text: string;
+    /**Horizontal alignment of text */
+    align: CanvasTextAlign;
 }
 
 export class TextRenderable {
@@ -159,13 +203,14 @@ export class TextRenderable {
         this.angle = init.angle ?? 0;
         this.color = init.color ?? '#000000';
         this.text = init.text ?? 'Text';
+        this.align = init.align ?? 'center';
     }
 }
 
 /**
  * A `RectangleRenderable` with a textured face instead of a solid fill.
  */
-export interface TexturedRenderable extends RectangleRenderable {
+export interface TexturedRenderable extends Omit<RectangleRenderable, 'color' | 'outline'> {
     /**Texture index of the layer, cropped area will be scaled to fit size */
     texture: number;
     /**Shift in texture pixels along the texture's X axis */
@@ -178,9 +223,13 @@ export interface TexturedRenderable extends RectangleRenderable {
     cropy: number;
 }
 
-export class TexturedRenderable extends RectangleRenderable {
+export class TexturedRenderable {
     constructor(init: Partial<TexturedRenderable>) {
-        super(init);
+        this.x = init.x ?? 0;
+        this.y = init.y ?? 0;
+        this.width = init.width ?? 100;
+        this.height = init.height ?? 100;
+        this.angle = init.angle ?? 0;
         this.texture = init.texture ?? 0;
     }
 }
@@ -217,7 +266,7 @@ export interface CompositeRenderable<CustomEntity extends CustomRenderable | Cus
      * Subcomponents: `CustomRenderable` or `CustomReadRenderable` (depends on layer type),
      * `PathRenderable`, `RectangleRenderable`, `TextRenderable`, and subclasses
      */
-    components: (CompositeRenderable<CustomEntity> | CustomEntity | PathRenderable | RectangleRenderable | TextRenderable)[]
+    components: (CompositeRenderable<CustomEntity> | CustomEntity | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable)[]
 }
 
 export class CompositeRenderable<CustomEntity extends CustomRenderable | CustomReadRenderable> {
@@ -288,6 +337,8 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
         type: Descriptors[Index]
         /**The canvas to use - canvas `0` is always the main rendering canvas passed into the `RenderEngine` constructor. */
         canvas: number
+        /**Optionally change the composite operation of entities drawn onto the layer. */
+        compositing?: GlobalCompositeOperation
         /**The target canvas to paint the layer to after completion. Leaving this the same as the `canvas` property will cause the `RenderEngine` to skip the copying step. */
         target: number
         /**Optionally change the composite operation to use when copying the layer onto another canvas. (default: `'source-over'`) */
@@ -298,6 +349,8 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
         clear?: boolean
         /**Enable draw smoothing. This is useful when rendering lots of axis-aligned rectangles as smoothing is resource-intense. (default: `true`) */
         smoothing?: boolean
+        /**Enable culling. This helps performance when there are lots of objects far from the screen. Disable this if large objects are disappearing from the screen. (default: `true`) */
+        culling?: boolean
     }
 };
 
@@ -316,10 +369,12 @@ export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors>
         canvas: OffscreenCanvas
         ctx: WebGL2RenderingContext
     }) & {
+        compositing: GlobalCompositeOperation
         targetCanvas: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
         targetCompositing: GlobalCompositeOperation
         clear: boolean
         smoothing: boolean
+        culling: boolean
         textures: ImageBitmap[]
     }
 };
@@ -330,8 +385,8 @@ export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors>
  */
 export type RenderEngineFrameInput<Descriptors extends RenderEngineLayerDescriptors> = {
     [Index in keyof Descriptors]:
-    [(CustomReadRenderable | PathRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomReadRenderable>)[], Descriptors[Index] & '2d'][0] |
-    [(CustomRenderable | PathRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomRenderable>)[], Descriptors[Index] & 'offscreen2d'][0] |
+    [(CustomReadRenderable | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomReadRenderable>)[], Descriptors[Index] & '2d'][0] |
+    [(CustomRenderable | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable>)[], Descriptors[Index] & 'offscreen2d'][0] |
     [(WebGLRectangleRenderable | WebGLTexturedRenderable)[], Descriptors[Index] & 'webgl'][0]
 };
 
@@ -343,10 +398,27 @@ export interface RenderEngineViewport {
     x: number
     /**Y coordinate of the center of the viewport */
     y: number
+    /**Angle in radians rotating counterclockwise */
+    angle: number
     /**Width of the viewport */
     width: number
     /**Height of the viewport */
     height: number
+}
+
+type Stats = { readonly avg: number, readonly min: number, readonly max: number };
+
+/**
+ * Performance metrics of a `RenderEngine`
+ */
+export interface RenderEngineMetrics {
+    readonly fps: number
+    readonly fpsHistory: Stats
+    readonly timings: {
+        readonly total: Stats,
+        readonly sort: Stats,
+        readonly draw: Stats
+    }
 }
 
 /**
@@ -379,7 +451,7 @@ export interface RenderEngineViewport {
  *         textures: []
  *     },
  * ]);
- * renderer.sendFrame({ x: 200, y: 150, width: 400, height: 300 }, [
+ * renderer.sendFrame({ x: 200, y: 150, angle: 0, width: 400, height: 300 }, [
  *     [ new TexturedRenderable({ x: 200, y: 150, width: 400, height: 300, texture: 0 }) ],
  *     [ player1, player2, ...arrows ],
  *     [ new PathRenderable({
@@ -409,13 +481,28 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     private readonly viewport: RenderEngineViewport = {
         x: 0,
         y: 0,
+        angle: 0,
         width: 0,
         height: 0
     };
 
+    private cullDist = 500;
     private fr: number = 60;
     private readonly layers: RenderEngineLayers<LayerDescriptors>;
     private drawing: boolean = true;
+    private readonly metricsCounters: {
+        frames: number[]
+        frameHistory: number[]
+        timings: number[]
+        sortTimings: number[]
+        drawTimings: number[]
+    } = {
+            frames: [],
+            frameHistory: [],
+            timings: [],
+            sortTimings: [],
+            drawTimings: []
+        };
 
     /**
      * @param {HTMLCanvasElement} baseCanvas Visible canvas to use as canvas `0`
@@ -445,10 +532,12 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             if (targetCtx === null) throw new RenderEngineError('Canvas2D context is not supported');
             // stuff that'll be used by all the layers
             const layerProps = {
+                compositing: layer.compositing ?? 'source-over',
                 targetCanvas: layer.target == layer.canvas ? null : targetCtx,
                 targetCompositing: layer.targetCompositing ?? 'source-over',
                 clear: layer.clear ?? false,
                 smoothing: layer.smoothing ?? true,
+                culling: layer.culling ?? true,
                 textures: layer.textures
             };
             // differentiate layer types
@@ -502,11 +591,25 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
      * Attempted refresh rate of the renderer, may be slower due to device performance
      */
     set framerate(fr: number) {
-        if (fr < 0) throw new RenderEngineError('Framerate cannot be negative');
+        if (fr <= 0) throw new RenderEngineError('Framerate cannot be zero or negative');
         this.fr = fr;
     }
     get framerate(): number {
         return this.fr;
+    }
+
+    /**
+     * Culling distance controls what entities are skipped for rendering. Entities who's positions
+     * that are more than this distance away from the viewport box.
+     * 
+     * Culling can be disabled using the `culling` option in layers using {@link RenderEngineInitPack}.
+     */
+    set cullDistance(dist: number) {
+        if (dist < 0) throw new RenderEngineError('Cannot have negative culling distance');
+        this.cullDist = dist;
+    }
+    get cullDistance() {
+        return this.cullDist;
     }
 
     /**
@@ -532,7 +635,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         this.frame.push(...entities);
     }
 
-    private transformRenderable<Renderable extends CompositeRenderable<CustomRenderable | CustomReadRenderable> | RectangleRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable<CustomRenderable | CustomReadRenderable>, cosVal: number, sinVal: number): Renderable {
+    private transformRenderable<Renderable extends CompositeRenderable<CustomRenderable | CustomReadRenderable> | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable<CustomRenderable | CustomReadRenderable>, cosVal: number, sinVal: number): Renderable {
         return {
             ...entity,
             x: parent.x + entity.x * cosVal - entity.y * sinVal,
@@ -543,52 +646,81 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
 
     private async drawFrame() {
         if (this.frame.length != this.layers.length) return;
+        const cullTop = this.viewport.y - this.viewport.height / 2 - this.cullDist;
+        const cullBottom = this.viewport.y + this.viewport.height / 2 + this.cullDist;
+        const cullLeft = this.viewport.x - this.viewport.width / 2 - this.cullDist;
+        const cullRight = this.viewport.x + this.viewport.width / 2 + this.cullDist;
         const twoPi = 2 * Math.PI;
+        const start = performance.now();
+        let sortTotal = 0;
+        let drawTotal = 0;
         for (let i = 0; i < this.layers.length; i++) {
             const layer = this.layers[i];
             const canvas = layer.canvas;
             const ctx = layer.ctx;
             const textures = layer.textures;
             if (ctx instanceof CanvasRenderingContext2D || ctx instanceof OffscreenCanvasRenderingContext2D) {
-                const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | PathRenderable | RectangleRenderable | TextRenderable | CompositeRenderable<CustomRenderable | CustomReadRenderable>)[];
+                const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | PathRenderable | RectangleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable | CustomReadRenderable>)[];
+                // metrics
                 // clear canvas and save default state
                 if (layer.clear) ctx.reset();
                 else ctx.restore();
                 ctx.resetTransform();
+                ctx.globalCompositeOperation = layer.compositing;
                 ctx.imageSmoothingEnabled = layer.smoothing;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.translate(-this.viewport.x, -this.viewport.y);
+                // center canvas onto viewport (optimization is actually kinda pointless)
+                if (this.viewport.angle % twoPi == 0) {
+                    ctx.translate(-this.viewport.x + this.viewport.width / 2, -this.viewport.y + this.viewport.height / 2);
+                } else {
+                    ctx.translate(-this.viewport.x, -this.viewport.y);
+                    ctx.rotate(-this.viewport.angle);
+                    ctx.translate(this.viewport.width / 2, this.viewport.height / 2);
+                }
                 ctx.save();
                 // flatten all composite renderables out into categories
                 // immediately draw all custom renderables
                 // bucket everything else into line, rectangular, and text groups (by color)
-                const simpleRenderableBuckets: Map<string, [RectangleRenderable[], TextRenderable[], PathRenderable[]]> = new Map();
+                const sortStart = performance.now();
+                const simpleRenderableBuckets: Map<string, [RectangleRenderable[], CircleRenderable[], CircleRenderable[], TextRenderable[], PathRenderable[]]> = new Map();
                 const texturedRenderables: TexturedRenderable[] = [];
                 const brokenTexturedRenderables: TexturedRenderable[] = [];
                 const compositeRenderableStack: CompositeRenderable<CustomRenderable | CustomReadRenderable>[] = [];
                 for (const entity of renderables) {
-                    if (entity instanceof CustomReadRenderable) {
-                        entity.draw(ctx as CanvasRenderingContext2D, textures.slice());
-                    } else if (entity instanceof CustomRenderable) {
-                        entity.draw(ctx as OffscreenCanvasRenderingContext2D, textures.slice());
-                    } else if (entity instanceof CompositeRenderable) {
+                    if (entity instanceof CompositeRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
                         compositeRenderableStack.push(entity);
+                    } else if (entity instanceof RectangleRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        const bucket = simpleRenderableBuckets.get(entity.color);
+                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[entity], [], [], [], []]);
+                        else bucket[0].push(entity);
                     } else if (entity instanceof TexturedRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
                         if (textures[entity.texture] === undefined) brokenTexturedRenderables.push(entity);
                         else texturedRenderables.push(entity);
+                    } else if (entity instanceof TextRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        const bucket = simpleRenderableBuckets.get(entity.color);
+                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [entity], []]);
+                        else bucket[3].push(entity);
                     } else if (entity instanceof PathRenderable) {
                         const bucket = simpleRenderableBuckets.get(entity.color);
-                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [entity]]);
-                        else bucket[2].push(entity);
-                    } else if (entity instanceof TextRenderable) {
-                        const bucket = simpleRenderableBuckets.get(entity.color);
-                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [entity], []]);
-                        else bucket[1].push(entity);
-                    } else if (entity instanceof RectangleRenderable) {
-                        const bucket = simpleRenderableBuckets.get(entity.color);
-                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[entity], [], []]);
-                        else bucket[0].push(entity);
+                        if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [], [entity]]);
+                        else bucket[4].push(entity);
+                    } else if (entity instanceof CircleRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (entity.fill != '') {
+                            const bucket = simpleRenderableBuckets.get(entity.fill);
+                            if (bucket === undefined) simpleRenderableBuckets.set(entity.fill, [[], [entity], [], [], []]);
+                            else bucket[1].push(entity);
+                        }
+                        if (entity.stroke != '' && entity.lineWidth != 0) {
+                            const bucket = simpleRenderableBuckets.get(entity.stroke);
+                            if (bucket === undefined) simpleRenderableBuckets.set(entity.stroke, [[], [], [entity], [], []]);
+                            else bucket[2].push(entity);
+                        }
                     } else {
                         console.warn(new RenderEngineError('Unrecognizable entity in pipeline, discarding!'));
                     }
@@ -600,14 +732,27 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     const sinVal = Math.sin(compositeEntity.angle);
                     const customComponents: (CustomRenderable | CustomReadRenderable)[] = [];
                     for (const entity of compositeEntity.components) {
-                        if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
-                            customComponents.push(entity);
-                        } else if (entity instanceof CompositeRenderable) {
-                            compositeRenderableStack.push(this.transformRenderable(entity, compositeEntity, sinVal, cosVal));
+                        if (entity instanceof CompositeRenderable) {
+                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            compositeRenderableStack.push();
+                        } else if (entity instanceof RectangleRenderable) {
+                            const bucket = simpleRenderableBuckets.get(entity.color);
+                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[transformed], [], [], [], []]);
+                            else bucket[0].push(transformed);
                         } else if (entity instanceof TexturedRenderable) {
-                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
+                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
                             else texturedRenderables.push(transformed);
+                        } else if (entity instanceof TextRenderable) {
+                            const bucket = simpleRenderableBuckets.get(entity.color);
+                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [transformed], []]);
+                            else bucket[3].push(transformed);
                         } else if (entity instanceof PathRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
                             const transformed: PathRenderable = {
@@ -618,18 +763,27 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                     y: compositeEntity.y - point.x * sinVal - point.y * cosVal
                                 })) as PathRenderable['points']
                             }
-                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [transformed]]);
-                            else bucket[2].push(transformed);
-                        } else if (entity instanceof TextRenderable) {
-                            const bucket = simpleRenderableBuckets.get(entity.color);
-                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [transformed], []]);
-                            else bucket[1].push(transformed);
-                        } else if (entity instanceof RectangleRenderable) {
-                            const bucket = simpleRenderableBuckets.get(entity.color);
-                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[transformed], [], []]);
-                            else bucket[0].push(transformed);
+                            if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [], [transformed]]);
+                            else bucket[4].push(transformed);
+                        } else if (entity instanceof CircleRenderable) {
+                            const transformed = {
+                                ...entity,
+                                x: compositeEntity.x + entity.x,
+                                y: compositeEntity.y + entity.y
+                            };
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (entity.fill != '') {
+                                const bucket = simpleRenderableBuckets.get(entity.fill);
+                                if (bucket === undefined) simpleRenderableBuckets.set(entity.fill, [[], [transformed], [], [], []]);
+                                else bucket[1].push(transformed);
+                            }
+                            if (entity.stroke != '' && entity.lineWidth != 0) {
+                                const bucket = simpleRenderableBuckets.get(entity.stroke);
+                                if (bucket === undefined) simpleRenderableBuckets.set(entity.stroke, [[], [], [transformed], [], []]);
+                                else bucket[2].push(transformed);
+                            }
+                        } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
+                            customComponents.push(entity);
                         } else {
                             console.warn(new RenderEngineError('Unrecognizable entity in pipeline (under CompositeRenderable), discarding!'));
                         }
@@ -645,10 +799,12 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         ctx.restore();
                     }
                 }
+                sortTotal += performance.now() - sortStart;
                 // reset again to clear any accidental changes
                 ctx.restore();
                 ctx.save();
                 // draw textured entities
+                const drawStart = performance.now();
                 for (const entity of texturedRenderables) {
                     if (entity.angle % twoPi == 0) {
                         if (entity instanceof AnimatedTexturedRenderable) {
@@ -671,28 +827,58 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 // draw all bucketed entities
                 for (const [color, bucket] of simpleRenderableBuckets) {
                     ctx.fillStyle = color;
-                    const rectangles = bucket[0];
-                    const texts = bucket[1].sort((a, b) => a.size - b.size);
-                    const lines = bucket[2];
+                    ctx.strokeStyle = color;
+                    ctx.lineJoin = 'miter';
+                    const rectangles = bucket[0].sort((a, b) => a.outline - b.outline);
+                    const circleFills = bucket[1];
+                    const circleStrokes = bucket[2].sort((a, b) => a.lineWidth - b.lineWidth);
+                    const texts = bucket[3].sort((a, b) => a.size - b.size);
+                    const lines = bucket[4].sort((a, b) => a.lineWidth - b.lineWidth);
                     // rectangles
+                    let currOutline: number = 0;
                     for (const rect of rectangles) {
+                        if (rect.outline != currOutline) {
+                            ctx.lineWidth = rect.outline;
+                            currOutline = rect.outline;
+                        }
+                        const drawFn = rect.outline != 0 ? ctx.strokeRect : ctx.fillRect;
                         if (rect.angle % twoPi == 0) {
-                            ctx.fillRect(rect.x - rect.width / 2, rect.y - rect.height / 2, rect.width, rect.height);
+                            drawFn.call(ctx, rect.x - rect.width / 2, rect.y - rect.height / 2, rect.width, rect.height);
                         } else {
                             ctx.save();
                             ctx.translate(rect.x, rect.y);
                             ctx.rotate(-rect.angle!);
-                            ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width, rect.height);
+                            drawFn.call(ctx, -rect.width / 2, -rect.height / 2, rect.width, rect.height);
                             ctx.restore();
                         }
                     }
+                    ctx.beginPath();
+                    // circle fills
+                    for (const circle of circleFills) {
+                        ctx.arc(circle.x, circle.y, circle.r - Math.max(0, circle.lineWidth), 0, twoPi);
+                    }
+                    ctx.fill();
+                    ctx.beginPath();
+                    // circle strokes
+                    let currWidth: number = 0;
+                    for (const circle of circleStrokes) {
+                        if (circle.lineWidth !== currWidth) {
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.lineWidth = Math.abs(circle.lineWidth);
+                            currWidth = circle.lineWidth;
+                        }
+                        ctx.arc(circle.x, circle.y, circle.r - circle.lineWidth / 2, 0, twoPi);
+                    }
+                    ctx.stroke();
                     // texts
-                    let currSize: number | undefined = undefined;
+                    let currSize: number = 0;
                     for (const text of texts) {
                         if (text.size !== currSize) {
                             ctx.font = text.size + 'px \'Pixel\'';
                             currSize = text.size;
                         }
+                        if (ctx.textAlign != text.align) ctx.textAlign = text.align;
                         if (text.angle % twoPi == 0) {
                             ctx.fillText(text.text, text.x, text.y);
                         } else {
@@ -704,15 +890,40 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         }
                     }
                     // lines
-                    if (lines.length != 0) ctx.strokeStyle = color;
+                    ctx.beginPath();
                     for (const line of lines) {
+                        if (ctx.lineJoin !== line.join || ctx.lineCap != line.cap || currWidth != line.lineWidth) {
+                            ctx.stroke();
+                            ctx.beginPath();
+                        }
                         if (ctx.lineJoin !== line.join) ctx.lineJoin = line.join;
                         if (ctx.lineCap !== line.cap) ctx.lineCap = line.cap;
+                        if (currWidth != line.lineWidth) {
+                            ctx.lineWidth = line.lineWidth;
+                            currWidth = line.lineWidth;
+                        }
                         if (line.points.length < 2 || line.points[0].type != 'line' || line.points[line.points.length - 1].type != 'line') {
                             throw new RenderEngineError('Illegal PathRenderable format');
                         }
-
+                        ctx.moveTo(line.points[0].x, line.points[0].y);
+                        for (let i = 1; i < line.points.length; i++) {
+                            const point = line.points[i];
+                            const nextPoint = line.points[i + 1];
+                            switch (point.type) {
+                                case 'line':
+                                    ctx.lineTo(point.x, point.y);
+                                    break;
+                                case 'arc':
+                                    ctx.arcTo(point.x, point.y, nextPoint.x, nextPoint.y, point.r);
+                                    ctx.lineTo(nextPoint.x, nextPoint.y);
+                                    break;
+                                case 'quad':
+                                    ctx.quadraticCurveTo(point.x, point.y, nextPoint.x, nextPoint.y);
+                                    break;
+                            }
+                        }
                     }
+                    ctx.stroke();
                 }
                 // draw all textured entities with invalid textures
                 ctx.fillStyle = '#000';
@@ -741,6 +952,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         ctx.restore();
                     }
                 }
+                drawTotal += performance.now() - drawStart;
             } else {
                 throw new RenderEngineError('WebGL rendering not implemented yet');
             }
@@ -755,6 +967,43 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 targetCanvas.shadowColor = '#0000';
                 targetCanvas.drawImage(canvas, 0, 0);
                 targetCanvas.restore();
+            }
+        }
+        // record performance metrics
+        const now = performance.now();
+        this.metricsCounters.frames.push(now);
+        this.metricsCounters.timings.push(now - start);
+        this.metricsCounters.sortTimings.push(sortTotal);
+        this.metricsCounters.drawTimings.push(drawTotal);
+        while (this.metricsCounters.frames[0] <= now - 1000) {
+            this.metricsCounters.frames.shift();
+            this.metricsCounters.frameHistory.shift();
+            this.metricsCounters.timings.shift();
+            this.metricsCounters.sortTimings.shift();
+            this.metricsCounters.drawTimings.shift();
+        }
+        this.metricsCounters.frameHistory.push(this.metricsCounters.frames.length);
+    }
+
+    private getStats(arr: number[]): Stats {
+        return {
+            avg: arr.reduce((p, c) => p + c, 0) / arr.length,
+            min: Math.min(...arr),
+            max: Math.max(...arr)
+        };
+    }
+
+    /**
+     * Performance metrics like framerates
+     */
+    get metrics(): RenderEngineMetrics {
+        return {
+            fps: this.metricsCounters.frames.length,
+            fpsHistory: this.getStats(this.metricsCounters.frameHistory),
+            timings: {
+                total: this.getStats(this.metricsCounters.timings),
+                sort: this.getStats(this.metricsCounters.sortTimings),
+                draw: this.getStats(this.metricsCounters.drawTimings)
             }
         }
     }
