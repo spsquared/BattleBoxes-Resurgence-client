@@ -8,7 +8,7 @@ import { Socket } from 'socket.io-client';
 import { createNamespacedSocket } from '@/server';
 import { ref, watch } from 'vue';
 import { startTransitionTo } from '@/menu/nav';
-import RenderEngine, { CompositeRenderable, CustomRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
+import RenderEngine, { CompositeRenderable, CustomRenderable, RectangleRenderable, TextRenderable, type RenderEngineViewport } from '@/game/renderer';
 
 const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
@@ -17,7 +17,7 @@ canvasRoot.appendChild(canvas);
 
 export const gameInstance = ref<GameInstance>();
 
-type renderLayers = ['offscreen2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
+type renderLayers = ['2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
 
 export class GameInstance {
 
@@ -25,6 +25,12 @@ export class GameInstance {
     readonly id: string;
     readonly socket: Socket;
     readonly loadPromise: Promise<void>;
+    readonly camera: RenderEngineViewport = {
+        x: 0,
+        y: 0,
+        width: window.innerWidth * window.devicePixelRatio,
+        height: window.innerHeight * window.devicePixelRatio
+    };
     private assetsLoaded: boolean = false;
 
     constructor(id: string, authCode: string) {
@@ -32,6 +38,16 @@ export class GameInstance {
         this.socket = createNamespacedSocket(id, authCode);
         this.socket.on('join', () => startTransitionTo('game'));
         this.loadPromise = this.loadRenderer();
+        this.onresize();
+        window.addEventListener('resize', () => this.onresize());
+        // I IWLL FORGET TO REMOVE THIS LISTENER
+        // I IWLL FORGET TO REMOVE THIS LISTENER
+        // I IWLL FORGET TO REMOVE THIS LISTENER
+    }
+
+    private onresize() {
+        this.camera.width = window.innerWidth * window.devicePixelRatio;
+        this.camera.height = window.innerHeight * window.devicePixelRatio;
     }
 
     get loaded() {
@@ -41,9 +57,9 @@ export class GameInstance {
     private async loadRenderer() {
         this.renderEngine = new RenderEngine<renderLayers>(canvas, [
             {
-                type: 'offscreen2d',
-                canvas: 1,
-                target: 1,
+                type: '2d',
+                canvas: 0,
+                target: 0,
                 textures: [],
                 clear: true
             },
@@ -51,7 +67,8 @@ export class GameInstance {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
-                textures: []
+                textures: [],
+                clear: true
             },
             {
                 type: 'offscreen2d',
@@ -82,52 +99,59 @@ export class GameInstance {
         ]);
         this.assetsLoaded = true;
 
-        this.renderEngine.framerate = 10;
         let a = 0;
         setInterval(() => {
-            this.renderEngine?.sendFrame([
+            this.renderEngine?.sendFrame(this.camera, [
                 [new TestBox(500, 200)],
-                [new SpinnyThing(a++)],
+                [new SpinnyThing(a += 0.1)],
                 [new TestText()],
                 [],
                 []
             ]);
-        }, 100);
+        }, 20);
     }
 }
 
+// still need some way to synchronize with the renderer
+// like requestAnimationFrame basically
+// awaitable function for next frame completion
+// function with callback for before next frame
+// also i guess allow composite renderables in composite renderables??
+
 class TestBox extends RectangleRenderable {
-    x: number;
-    y: number;
-    width = 100;
-    height = 100;
-    angle = -Math.PI / 3;
-    color = '#0F0';
     constructor(x: number, y: number) {
-        super();
-        this.x = x;
-        this.y = y;
+        super({
+            x: x,
+            y: y,
+            width: 100,
+            height: 200,
+            color: '#0F0',
+            angle: -Math.PI / 3
+        });
     }
 }
 
 class TestText extends TextRenderable {
-    x = 500;
-    y = 200;
-    angle = -Math.PI / 3;
-    text = 'Test';
-    color = '#F00';
-    size = 20;
+    constructor(x?: number, y?: number, a?: number) {
+        super({
+            x: x ?? 500,
+            y: y ?? 200,
+            angle: a,
+            size: 20,
+            color: '#F00',
+            text: 'Test'
+        });
+    }
 }
 
 class SpinnyThing extends CompositeRenderable<CustomRenderable> {
-    x = 400;
-    y = 5000;
-    angle: number;
-    components: (RectangleRenderable | TextRenderable | CustomRenderable)[];
     constructor(a: number) {
-        super();
-        this.angle = a;
-        this.components = [new TestBox(-20, -20), new TestBox(20, 20)];
+        super({
+            x: 400,
+            y: 400,
+            angle: a,
+            components: [new TestBox(-80, -80), new TestBox(80, 80), new TestText(0, 0, Math.PI / 3)]
+        });
     }
 }
 

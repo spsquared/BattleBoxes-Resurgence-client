@@ -8,7 +8,6 @@ import GameSelectBackground from './GameSelectBackground.vue';
 import { executeRecaptcha } from '@/login/recaptcha';
 import { GameInstance, gameInstance } from '@/game/game';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
-import { resolve } from 'path';
 
 const pane = ref<'select' | 'create'>('select');
 
@@ -116,29 +115,31 @@ const createGame = async () => {
                         <Inputs.TextBox v-model="joinCode" placeholder="Join Code" style="flex-grow: 1; text-align: center;" title="6-character join code, letters and numbers" maxlength="6" pattern="[A-Za-z0-9]{6}"></Inputs.TextBox>
                         <Inputs.IconButton class="joinCodeButton" text="" type="submit" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(joinCode)" :disabled="!joinCodeValid"></Inputs.IconButton>
                     </form>
-                    <div class="gameList">
-                        <TransitionGroup name="entry">
-                            <div class="gameEntryWrapper" v-for="(entry, index) of gameList" :key="entry.id" :style="{ transitionDelay: (index * 100) + 'ms' }">
-                                <div class="gameEntry" :style="{ transitionDelay: (index * 100) + 'ms' }">
-                                    <div class="gameEntryInfo">
-                                        <span class="gameEntryId">{{ entry.id }}</span>
-                                        <span class="gameEntryHost">Host: <span style="font-weight: bold">{{ entry.host }}</span></span>
-                                    </div>
-                                    <div class="gameEntryInfo gameEntryInfo2">
-                                        <span>
-                                            <span :style="{ color: entry.playerCount == (entry.options.maxPlayers - entry.options.aiPlayers) ? '#F00' : '#050'}">
-                                                {{ entry.playerCount }}
+                    <div class="gameListWrapper">
+                        <div class="gameList">
+                            <TransitionGroup name="entry">
+                                <div class="gameEntryWrapper" v-for="(entry, index) of gameList" :key="entry.id" :style="{ transitionDelay: (index * 100) + 'ms' }">
+                                    <div class="gameEntry" :style="{ transitionDelay: (index * 100) + 'ms' }">
+                                        <div class="gameEntryInfo">
+                                            <span class="gameEntryId">{{ entry.id }}</span>
+                                            <span class="gameEntryHost">Host: <span style="font-weight: bold">{{ entry.host }}</span></span>
+                                        </div>
+                                        <div class="gameEntryInfo gameEntryInfo2">
+                                            <span>
+                                                <span :style="{ color: entry.playerCount == (entry.options.maxPlayers - entry.options.aiPlayers) ? '#F00' : '#050'}">
+                                                    {{ entry.playerCount }}
+                                                </span>
+                                                /
+                                                {{ entry.options.maxPlayers - entry.options.aiPlayers }}
+                                                Players
                                             </span>
-                                            /
-                                            {{ entry.options.maxPlayers - entry.options.aiPlayers }}
-                                            Players
-                                        </span>
-                                        <span>{{ entry.options.aiPlayers }} AI</span>
+                                            <span>{{ entry.options.aiPlayers }} AI</span>
+                                        </div>
+                                        <Inputs.IconButton class="gameEntryJoinButton" text="" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(entry.id)" :disabled="joinGameWait"></Inputs.IconButton>
                                     </div>
-                                    <Inputs.IconButton class="gameEntryJoinButton" text="" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(entry.id)" :disabled="joinGameWait"></Inputs.IconButton>
                                 </div>
-                            </div>
-                        </TransitionGroup>
+                            </TransitionGroup>
+                        </div>
                     </div>
                     <Transition name="wait">
                         <div class="waitCover" v-if="joinGameWait">
@@ -273,19 +274,33 @@ const createGame = async () => {
     filter: v-bind("joinCodeValid ? '' : 'grayscale(1)'");
 }
 
-.gameList {
-    display: grid;
-    grid-auto-flow: row;
+.gameListWrapper {
+    contain: layout;
     border: 4px solid black;
-    max-height: 50vh;
-    align-content: start;
+    border-bottom: 2px solid black;
     flex-grow: 1;
-    overflow-y: scroll;
+}
+
+.gameListWrapper::after {
+    content: '';
+    position: fixed;
+    bottom: 0px;
+    width: 100%;
+    height: 2px;
+    background-color: black;
+}
+
+.gameList {
+    display: flex;
+    flex-direction: column;
+    max-height: 50vh;
+    overflow-y: auto;
 }
 
 .gameList::-webkit-scrollbar {
     width: 12px;
     background-color: #555;
+    border-bottom: 2px solid black;
 }
 
 .gameList::-webkit-scrollbar-thumb {
@@ -296,13 +311,9 @@ const createGame = async () => {
 
 .gameEntryWrapper {
     position: relative;
-    border-top: 2px solid black;
+    border-bottom: 2px solid black;
     --height: calc(4 * var(--font-18));
-    min-height: vaR(--height);
-}
-
-.gameEntryWrapper:first-child {
-    border: none;
+    min-height: var(--height);
 }
 
 .gameEntry {
@@ -417,7 +428,6 @@ const createGame = async () => {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
 }
 
 .waitSpinner {
