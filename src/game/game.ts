@@ -2,13 +2,16 @@
 
 import '@/game/renderer';
 import '@/game/sound';
-import '@/game/entity';
+import '@/game/entities/entity';
 
 import { Socket } from 'socket.io-client';
-import { createNamespacedSocket } from '@/server';
+import { checkConnection, createNamespacedSocket, serverFetch } from '@/server';
 import { ref, watch } from 'vue';
 import { startTransitionTo } from '@/menu/nav';
-import RenderEngine, { CircleRenderable, RectangleRenderable, TextRenderable, type RenderEngineViewport } from '@/game/renderer';
+import RenderEngine, { CustomRenderable, type RenderEngineMetrics, type RenderEngineViewport } from '@/game/renderer';
+import { Player, type PlayerTickData } from './entities/player';
+import { Entity } from '@/game/entities/entity';
+import { modal } from '@/components/modal';
 
 const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
@@ -17,8 +20,13 @@ canvasRoot.appendChild(canvas);
 
 export const gameInstance = ref<GameInstance>();
 
-type renderLayers = ['2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
+// map, misc entities, players/bullets, particles, above, ui
+// add particles "webgl" and replace ui 2d with "custom" later
+type renderLayers = ['offscreen2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
 
+/**
+ * Handles all of the game logic for all of the game. There can only be one!!!
+ */
 export class GameInstance {
 
     private renderEngine: RenderEngine<renderLayers> | null = null;
@@ -36,32 +44,74 @@ export class GameInstance {
     drawPerfMetrics: boolean = false;
 
     constructor(id: string, authCode: string) {
+        // weird singleton implementation
+        if (gameInstance.value !== undefined) throw new Error('Game Instance already exists!');
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
         this.socket.on('join', () => startTransitionTo('game'));
         this.loadPromise = this.loadRenderer();
-        this.onresize();
-        window.addEventListener('resize', () => this.onresize());
-        // I IWLL FORGET TO REMOVE THIS LISTENER
-        // I IWLL FORGET TO REMOVE THIS LISTENER
-        // I IWLL FORGET TO REMOVE THIS LISTENER
+        this.onResize();
+        const resizeListener = () => this.onResize();
+        window.addEventListener('resize', resizeListener);
+        watch(gameInstance, () => {
+            if (gameInstance.value === undefined) {
+                this.destroy();
+                window.removeEventListener('resize', resizeListener);
+            }
+        });
+        // socket connection
+        this.socket.on('disconnect', async (reason) => {
+            await modal.showModal({
+                title: 'Disconnected',
+                content: reason ?? 'connection lost',
+                color: 'red'
+            }).result;
+            startTransitionTo('menu');
+            checkConnection();
+            this.destroy();
+        });
+        this.socket.on('connect_error', async (err) => {
+            await modal.showModal({
+                title: 'Connection error',
+                content: err.message ?? 'connection failed',
+                color: 'red'
+            }).result;
+            checkConnection();
+            this.destroy();
+        });
+        // socket stuff
+        this.socket.on('tick', (tick) => this.onTick(tick));
+        this.socket.on('tick', () => console.log('bug'))
     }
 
-    private onresize() {
+    private onResize() {
         this.camera.width = window.innerWidth * window.devicePixelRatio;
         this.camera.height = window.innerHeight * window.devicePixelRatio;
+    }
+
+    private onTick(tick: {
+        tick: number
+        tps: number
+        players: PlayerTickData[]
+    }) {
+        console.log('buh')
+        Entity.tick = tick.tick;
+        Entity.serverTps = tick.tps;
+        Entity.onTick([]);
+        Player.onTick(tick.players);
     }
 
     get loaded() {
         return this.assetsLoaded;
     }
 
+    private readonly uiRenderer: UIRenderer = new UIRenderer();
     private async loadRenderer() {
         this.renderEngine = new RenderEngine<renderLayers>(canvas, [
             {
-                type: '2d',
-                canvas: 0,
-                target: 0,
+                type: 'offscreen2d',
+                canvas: 1,
+                target: 1,
                 textures: [],
                 clear: true,
                 culling: false
@@ -70,13 +120,12 @@ export class GameInstance {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
-                textures: [],
-                clear: true
+                textures: []
             },
             {
                 type: 'offscreen2d',
                 canvas: 1,
-                target: 0,
+                target: 1,
                 textures: []
             },
             // {
@@ -91,7 +140,6 @@ export class GameInstance {
                 canvas: 1,
                 target: 0,
                 textures: [],
-                clear: true
             },
             {
                 type: '2d',
@@ -100,90 +148,74 @@ export class GameInstance {
                 textures: []
             }
         ]);
+        this.renderEngine.onBeforeFrame(() => this.beforeDraw());
         this.assetsLoaded = true;
+    }
 
-        const colors = ['red', 'lime', 'blue', 'green', 'gold', 'yellow', 'magenta', 'orange', 'dodgerblue', 'violet', 'gray', 'white'];
-        setInterval(() => {
-            const metrics = this.renderEngine?.metrics;
-            this.renderEngine?.sendFrame(this.camera, [
-                [],
-                [...Array.from(new Array(100), (): RectangleRenderable => new RectangleRenderable({
-                    x: (Math.random() - 0.5) * this.camera.width,
-                    y: (Math.random() - 0.5) * this.camera.height,
-                    width: Math.random() * 50 + 10,
-                    height: Math.random() * 50 + 10,
-                    color: colors[~~(Math.random() * colors.length)],
-                    // color: `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`
-                    // angle: Math.random() * 2 * Math.PI
-                }))],
-                [
-                    new CircleRenderable({
-                        r: 100,
-                        fill: 'red',
-                        stroke: 'blue',
-                        lineWidth: 20
-                    }),
-                    new CircleRenderable({
-                        x: 300,
-                        r: 100,
-                        fill: 'blue',
-                        stroke: 'red',
-                        lineWidth: -20
-                    })
-                ],
-                [],
-                [
-                    new TextRenderable({
-                        x: -this.camera.width / 2 + 8,
-                        y: -this.camera.height / 2 + 20,
-                        align: 'left',
-                        size: 14,
-                        color: 'white',
-                        text: `FPS: ${metrics!.fps} (${Math.round(metrics!.fpsHistory.avg)} avg; ${metrics!.fpsHistory.min} min; ${metrics!.fpsHistory.max} max)`
-                    }),
-                    new TextRenderable({
-                        x: -this.camera.width / 2 + 8,
-                        y: -this.camera.height / 2 + 36,
-                        align: 'left',
-                        size: 14,
-                        color: 'white',
-                        text: 'Timings:'
-                    }),
-                    new TextRenderable({
-                        x: -this.camera.width / 2 + 24,
-                        y: -this.camera.height / 2 + 52,
-                        align: 'left',
-                        size: 14,
-                        color: 'white',
-                        text: `Total: ${Math.round(metrics!.timings.total.avg)}ms avg; ${Math.round(metrics!.timings.total.min)}ms min; ${Math.round(metrics!.timings.total.max)}ms max`
-                    }),
-                    new TextRenderable({
-                        x: -this.camera.width / 2 + 24,
-                        y: -this.camera.height / 2 + 68,
-                        align: 'left',
-                        size: 14,
-                        color: 'white',
-                        text: `Sort: ${Math.round(metrics!.timings.sort.avg)}ms avg; ${Math.round(metrics!.timings.sort.min)}ms min; ${Math.round(metrics!.timings.sort.max)}ms max`
-                    }),
-                    new TextRenderable({
-                        x: -this.camera.width / 2 + 24,
-                        y: -this.camera.height / 2 + 84,
-                        align: 'left',
-                        size: 14,
-                        color: 'white',
-                        text: `Draw: ${Math.round(metrics!.timings.draw.avg)}ms avg; ${Math.round(metrics!.timings.draw.min)}ms min; ${Math.round(metrics!.timings.draw.max)}ms max`
-                    }),
-                ]
-            ]);
-        }, 20);
+    private async loadTexture(src: string): Promise<ImageBitmap> {
+        return await serverFetch('/resources/textures/' + src).then((res) => res.blob()).then((blob) => createImageBitmap(blob));
+    }
+
+    private async beforeDraw() {
+        if (this.renderEngine == undefined) return;
+        // send to pipeline also lerp
+        this.uiRenderer.metrics = this.renderEngine.metrics;
+        const t = performance.now();
+        this.renderEngine.sendFrame(this.camera, [
+            [],
+            [...Array.from(Player.list.values())].map((e) => { e.lerp(t); return e; }),
+            [],
+            [],
+            []
+        ])
+    }
+
+    destroy() {
+        this.renderEngine?.stop();
+        this.socket.disconnect();
+        gameInstance.value = undefined;
     }
 }
 
-// still need some way to synchronize with the renderer
-// like requestAnimationFrame basically
-// awaitable function for next frame completion
-// function with callback for before next frame
-// also need metrics and stuff
+class UIRenderer extends CustomRenderable {
+    metrics?: RenderEngineMetrics;
+    graphs: boolean = false;
+
+    draw(ctx: OffscreenCanvasRenderingContext2D) {
+        ctx.font = '14px Pixel';
+        ctx.fillStyle = '#0005';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.resetTransform();
+        if (this.metrics == undefined) {
+            ctx.fillRect(4, 4, ctx.measureText('No Data').width, 16);
+            ctx.fillStyle = '#fff';
+            ctx.fillText('No Data', 6, 6);
+        } else {
+            const l1 = `FPS: ${this.metrics.fps} (${Math.round(this.metrics.fpsHistory.avg)} avg; ${this.metrics.fpsHistory.min} min; ${this.metrics.fpsHistory.max} max)`;
+            const l2 = 'Timings:';
+            const l3 = `Total: ${Math.round(this.metrics.timings.total.avg)}ms avg; ${Math.round(this.metrics.timings.total.min)}ms min; ${Math.round(this.metrics.timings.total.max)}ms max`;
+            const l4 = `Sort: ${Math.round(this.metrics.timings.sort.avg)}ms avg; ${Math.round(this.metrics.timings.sort.min)}ms min; ${Math.round(this.metrics.timings.sort.max)}ms max`;
+            const l5 = `Draw: ${Math.round(this.metrics.timings.draw.avg)}ms avg; ${Math.round(this.metrics.timings.draw.min)}ms min; ${Math.round(this.metrics.timings.draw.max)}ms max`;
+            ctx.fillRect(4, 8, ctx.measureText(l1).width, 16);
+            ctx.fillRect(4, 24, ctx.measureText(l2).width, 16);
+            ctx.fillRect(4, 40, ctx.measureText(l3).width, 16);
+            ctx.fillRect(4, 56, ctx.measureText(l4).width, 16);
+            ctx.fillRect(4, 72, ctx.measureText(l5).width, 16);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(l1, 6, 10);
+            ctx.fillText(l2, 6, 26);
+            ctx.fillText(l3, 14, 42);
+            ctx.fillText(l4, 14, 58);
+            ctx.fillText(l5, 14, 74);
+        }
+        if (this.graphs) {
+            ctx.fillStyle = '#0005';
+        }
+    }
+}
+
+// maybe also need to put rendering on separate thread if possible
 
 if (import.meta.env.DEV) {
     console.info('Development mode enabled, exposing game instances');

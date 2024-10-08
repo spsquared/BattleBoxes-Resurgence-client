@@ -2,7 +2,7 @@
 import { modal } from '@/components/modal';
 import { showFadeScreen, startTransitionTo } from '@/menu/nav';
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { httpCodeToMessage, serverFetch } from '@/server';
+import { checkConnection, httpCodeToMessage, serverFetch } from '@/server';
 import * as Inputs from '@/components/inputs';
 import GameSelectBackground from './GameSelectBackground.vue';
 import { executeRecaptcha } from '@/login/recaptcha';
@@ -45,11 +45,12 @@ const loadGameList = async () => {
     if (res.status == 200) {
         gameList.value = await res.json();
     } else {
-        modal.showModal({
+        await modal.showModal({
             title: 'Could not fetch game list',
             content: httpCodeToMessage(res.status),
             color: 'red'
-        });
+        }).result;
+        checkConnection();
         clearInterval(gameListRefreshTimer);
     }
 };
@@ -72,12 +73,13 @@ const joinGame = async (code: string) => {
         const { id, authCode } = await res.json();
         gameInstance.value = new GameInstance(id, authCode);
     } else {
-        modal.showModal({
+        joinGameWait.value = false;
+        await modal.showModal({
             title: 'Could not join game',
             content: httpCodeToMessage(res.status, 'Account or game'),
             color: 'red'
-        });
-        joinGameWait.value = false;
+        }).result;
+        checkConnection();
     }
 };
 
@@ -89,12 +91,13 @@ const createGame = async () => {
         const { id, authCode } = await res.json();
         gameInstance.value = new GameInstance(id, authCode);
     } else {
-        modal.showModal({
+        joinGameWait.value = false;
+        await modal.showModal({
             title: 'Could not create game',
             content: httpCodeToMessage(res.status, 'Account'),
             color: 'red'
-        });
-        joinGameWait.value = false;
+        }).result;
+        checkConnection();
     }
 };
 </script>

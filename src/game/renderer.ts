@@ -312,14 +312,15 @@ export class RenderEngineError extends Error {
 /**
  * Describes the layers of the rendering pipeline from bottom to top.
  * 
- * * **`2d`**: Render in 2D to a `HTMLCanvasElement`. Allows `CustomReadRenderable`,`PathRenderable`,  `RectangleRenderable`,
- * `TextRenderable`, and `CompositeRenderable<CustomReadRenderable>` entities (includes subclasses like `TexturedRenderable`)
+ * * **`2d`**: Render in 2D to a `HTMLCanvasElement`, using a Web `Worker`. Allows `CustomReadRenderable`,
+ * `PathRenderable`,  `RectangleRenderable`, `TextRenderable`, and `CompositeRenderable<CustomReadRenderable>`
+ * entities (includes subclasses like `TexturedRenderable`)
  * 
- * * **`offscreen2d`**: Render in 2D to an `OffscreenCanvas`. Allows `CustomRenderable`,`PathRenderable`,  `RectangleRenderable`,
- * `TextRenderable`, and `CompositeRenderable<CustomRenderable>` entities (includes subclasses like `TexturedRenderable`)
+ * * **`offscreen2d`**: Render in 2D to an `OffscreenCanvas`, using a Web `Worker`. Allows `CustomRenderable`,
+ * `PathRenderable`,  `RectangleRenderable`, `TextRenderable`, and `CompositeRenderable<CustomRenderable>`
+ * entities (includes subclasses like `TexturedRenderable`)
  * 
- * * **`webgl`**: Render in 3D or 2D to an `OffscreenCanvas`. Useful for large numbers of simple entities
- * or 3D effects
+ * * **`webgl`**: Render in 3D or 2D to an `OffscreenCanvas`. Useful for large numbers of simple entities or 3D effects.
  */
 export type RenderEngineLayerDescriptors = ('2d' | 'offscreen2d' | 'webgl')[];
 
@@ -422,7 +423,7 @@ export interface RenderEngineMetrics {
 }
 
 /**
- * Abstracted rendering engine with static typing and layers. Supports drawing rectangles, complex line paths,
+ * Abstracted rendering engine with static typing and layers. Supports drawing rectangles, cirlces, complex line paths,
  * textures, and "composite entities". "Composite entities" are composed of multiple children that move with
  * the parent, allowing for easy creation of otherwise complex entities. WebGL can be used for drawing lots of
  * very similar objects or 3D effects.
@@ -572,9 +573,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         }
         // start draw loop
         const startDraw = async () => {
-            let start = performance.now();
             while (this.drawing) {
-                start = performance.now();
+                const start = performance.now();
                 await new Promise<void>((resolve) => {
                     window.requestAnimationFrame(async () => {
                         await this.drawFrame();
@@ -619,6 +619,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     sendFrame(viewport: RenderEngineViewport, entities: RenderEngineFrameInput<LayerDescriptors>) {
         this.viewport.x = viewport.x;
         this.viewport.y = viewport.y;
+        this.viewport.angle = viewport.angle;
         if (this.viewport.width != viewport.width || this.viewport.height != viewport.height) {
             this.viewport.width = viewport.width;
             this.viewport.height = viewport.height;
@@ -635,6 +636,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         this.frame.push(...entities);
     }
 
+    private readonly nextFrameCallbacks: Set<() => any> = new Set();
+    private readonly frameCallbacks: Set<() => any> = new Set();
+    private readonly nextFramePromises: Set<() => void> = new Set();
+
     private transformRenderable<Renderable extends CompositeRenderable<CustomRenderable | CustomReadRenderable> | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable<CustomRenderable | CustomReadRenderable>, cosVal: number, sinVal: number): Renderable {
         return {
             ...entity,
@@ -645,6 +650,15 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     }
 
     private async drawFrame() {
+        // before frame callbacks first
+        await Promise.all([...Array.from(this.nextFrameCallbacks), ...Array.from(this.frameCallbacks)].map((cb) => {
+            try {
+                return cb();
+            } catch (err) {
+                return;
+            }
+        }));
+        this.nextFrameCallbacks.clear();
         if (this.frame.length != this.layers.length) return;
         const cullTop = this.viewport.y - this.viewport.height / 2 - this.cullDist;
         const cullBottom = this.viewport.y + this.viewport.height / 2 + this.cullDist;
@@ -661,7 +675,6 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             const textures = layer.textures;
             if (ctx instanceof CanvasRenderingContext2D || ctx instanceof OffscreenCanvasRenderingContext2D) {
                 const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | PathRenderable | RectangleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable | CustomReadRenderable>)[];
-                // metrics
                 // clear canvas and save default state
                 if (layer.clear) ctx.reset();
                 else ctx.restore();
@@ -671,13 +684,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 // center canvas onto viewport (optimization is actually kinda pointless)
-                if (this.viewport.angle % twoPi == 0) {
-                    ctx.translate(-this.viewport.x + this.viewport.width / 2, -this.viewport.y + this.viewport.height / 2);
-                } else {
-                    ctx.translate(-this.viewport.x, -this.viewport.y);
-                    ctx.rotate(-this.viewport.angle);
-                    ctx.translate(this.viewport.width / 2, this.viewport.height / 2);
-                }
+                ctx.translate(this.viewport.x + this.viewport.width / 2, -this.viewport.y + this.viewport.height / 2);
+                if (this.viewport.angle % twoPi != 0) ctx.rotate(-this.viewport.angle);
                 ctx.save();
                 // flatten all composite renderables out into categories
                 // immediately draw all custom renderables
@@ -721,6 +729,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.stroke, [[], [], [entity], [], []]);
                             else bucket[2].push(entity);
                         }
+                    } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
+                        ctx.save();
+                        entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures);
+                        ctx.restore();
                     } else {
                         console.warn(new RenderEngineError('Unrecognizable entity in pipeline, discarding!'));
                     }
@@ -793,8 +805,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         ctx.translate(compositeEntity.x, compositeEntity.y);
                         if (compositeEntity.angle) ctx.rotate(compositeEntity.angle);
                         for (const component of customComponents) {
+                            ctx.save();
                             if (component instanceof CustomReadRenderable) component.draw(ctx as CanvasRenderingContext2D, textures.slice());
                             else component.draw(ctx as OffscreenCanvasRenderingContext2D, textures.slice());
+                            ctx.restore();
                         }
                         ctx.restore();
                     }
@@ -808,13 +822,13 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 for (const entity of texturedRenderables) {
                     if (entity.angle % twoPi == 0) {
                         if (entity instanceof AnimatedTexturedRenderable) {
-                            ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, entity.y - entity.height / 2, entity.width, entity.height);
+                            ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
                         } else {
-                            ctx.drawImage(textures[entity.texture], entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, entity.y - entity.height / 2, entity.width, entity.height);
+                            ctx.drawImage(textures[entity.texture], entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
                         }
                     } else {
                         ctx.save();
-                        ctx.translate(entity.x, entity.y);
+                        ctx.translate(entity.x, -entity.y);
                         ctx.rotate(-entity.angle!);
                         if (entity instanceof AnimatedTexturedRenderable) {
                             ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
@@ -843,10 +857,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         }
                         const drawFn = rect.outline != 0 ? ctx.strokeRect : ctx.fillRect;
                         if (rect.angle % twoPi == 0) {
-                            drawFn.call(ctx, rect.x - rect.width / 2, rect.y - rect.height / 2, rect.width, rect.height);
+                            drawFn.call(ctx, rect.x - rect.width / 2, -rect.y - rect.height / 2, rect.width, rect.height);
                         } else {
                             ctx.save();
-                            ctx.translate(rect.x, rect.y);
+                            ctx.translate(rect.x, -rect.y);
                             ctx.rotate(-rect.angle!);
                             drawFn.call(ctx, -rect.width / 2, -rect.height / 2, rect.width, rect.height);
                             ctx.restore();
@@ -855,7 +869,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     ctx.beginPath();
                     // circle fills
                     for (const circle of circleFills) {
-                        ctx.arc(circle.x, circle.y, circle.r - Math.max(0, circle.lineWidth), 0, twoPi);
+                        ctx.arc(circle.x, -circle.y, circle.r - Math.max(0, circle.lineWidth), 0, twoPi);
                     }
                     ctx.fill();
                     ctx.beginPath();
@@ -868,7 +882,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             ctx.lineWidth = Math.abs(circle.lineWidth);
                             currWidth = circle.lineWidth;
                         }
-                        ctx.arc(circle.x, circle.y, circle.r - circle.lineWidth / 2, 0, twoPi);
+                        ctx.arc(circle.x, -circle.y, circle.r - circle.lineWidth / 2, 0, twoPi);
                     }
                     ctx.stroke();
                     // texts
@@ -880,10 +894,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         }
                         if (ctx.textAlign != text.align) ctx.textAlign = text.align;
                         if (text.angle % twoPi == 0) {
-                            ctx.fillText(text.text, text.x, text.y);
+                            ctx.fillText(text.text, text.x, -text.y);
                         } else {
                             ctx.save();
-                            ctx.translate(text.x, text.y);
+                            ctx.translate(text.x, -text.y);
                             ctx.rotate(-text.angle!);
                             ctx.fillText(text.text, 0, 0);
                             ctx.restore();
@@ -905,20 +919,20 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         if (line.points.length < 2 || line.points[0].type != 'line' || line.points[line.points.length - 1].type != 'line') {
                             throw new RenderEngineError('Illegal PathRenderable format');
                         }
-                        ctx.moveTo(line.points[0].x, line.points[0].y);
+                        ctx.moveTo(line.points[0].x, -line.points[0].y);
                         for (let i = 1; i < line.points.length; i++) {
                             const point = line.points[i];
                             const nextPoint = line.points[i + 1];
                             switch (point.type) {
                                 case 'line':
-                                    ctx.lineTo(point.x, point.y);
+                                    ctx.lineTo(point.x, -point.y);
                                     break;
                                 case 'arc':
-                                    ctx.arcTo(point.x, point.y, nextPoint.x, nextPoint.y, point.r);
+                                    ctx.arcTo(point.x, -point.y, nextPoint.x, -nextPoint.y, point.r);
                                     ctx.lineTo(nextPoint.x, nextPoint.y);
                                     break;
                                 case 'quad':
-                                    ctx.quadraticCurveTo(point.x, point.y, nextPoint.x, nextPoint.y);
+                                    ctx.quadraticCurveTo(point.x, -point.y, nextPoint.x, -nextPoint.y);
                                     break;
                             }
                         }
@@ -929,10 +943,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.fillStyle = '#000';
                 for (const rect of brokenTexturedRenderables) {
                     if (rect.angle % twoPi == 0) {
-                        ctx.fillRect(rect.x - rect.width / 2, rect.y - rect.height / 2, rect.width, rect.height);
+                        ctx.fillRect(rect.x - rect.width / 2, -rect.y - rect.height / 2, rect.width, rect.height);
                     } else {
                         ctx.save();
-                        ctx.translate(rect.x, rect.y);
+                        ctx.translate(rect.x, -rect.y);
                         ctx.rotate(-rect.angle!);
                         ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width, rect.height);
                         ctx.restore();
@@ -941,11 +955,11 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.fillStyle = '#F0F';
                 for (const rect of brokenTexturedRenderables) {
                     if (rect.angle % twoPi == 0) {
-                        ctx.fillRect(rect.x - rect.width / 2, rect.y - rect.height / 2, rect.width / 2, rect.height / 2);
+                        ctx.fillRect(rect.x - rect.width / 2, -rect.y - rect.height / 2, rect.width / 2, rect.height / 2);
                         ctx.fillRect(rect.x, rect.y, rect.width / 2, rect.height / 2);
                     } else {
                         ctx.save();
-                        ctx.translate(rect.x, rect.y);
+                        ctx.translate(rect.x, -rect.y);
                         ctx.rotate(-rect.angle!);
                         ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width / 2, rect.height / 2);
                         ctx.fillRect(0, 0, rect.width / 2, rect.height / 2);
@@ -975,7 +989,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         this.metricsCounters.timings.push(now - start);
         this.metricsCounters.sortTimings.push(sortTotal);
         this.metricsCounters.drawTimings.push(drawTotal);
-        while (this.metricsCounters.frames[0] <= now - 1000) {
+        while (this.metricsCounters.frames[0] <= start - 1000) {
             this.metricsCounters.frames.shift();
             this.metricsCounters.frameHistory.shift();
             this.metricsCounters.timings.shift();
@@ -983,6 +997,41 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             this.metricsCounters.drawTimings.shift();
         }
         this.metricsCounters.frameHistory.push(this.metricsCounters.frames.length);
+        // callbacks for frame completion
+        this.nextFramePromises.forEach((resolve) => resolve());
+        this.nextFramePromises.clear();
+    }
+
+    /**
+     * Add a callback function to run before the next frame is drawn. Can be an `async` function.
+     * @param cb Callback function (**`async` functions with a long resolve time will block frames!)
+     */
+    onBeforeNextFrame(cb: () => any): void {
+        this.nextFrameCallbacks.add(cb);
+    }
+
+    /**
+     * Add a callback function to run before a frame is drawn. Can be an `async` function.
+     * @param cb Callback function (**`async` functions with a long resolve time will block frames!)
+     */
+    onBeforeFrame(cb: () => any): void {
+        this.frameCallbacks.add(cb);
+    }
+
+    /**
+     * Remove a previously added callback function that ran before each frame was drawn.
+     * @param cb Callback function to remove
+     * @returns If the callback function was previously added and is now removed
+     */
+    offBeforeFrame(cb: () => any): boolean {
+        return this.frameCallbacks.delete(cb);
+    }
+
+    /**
+     * Returns a `Promise` that resolves to `undefined` upon completion of drawing the next frame.
+     */
+    async nextFrame(): Promise<void> {
+        await new Promise<void>((resolve) => this.nextFramePromises.add(resolve));
     }
 
     private getStats(arr: number[]): Stats {
