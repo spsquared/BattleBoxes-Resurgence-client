@@ -1,9 +1,9 @@
-import { RectangleRenderable } from '../renderer';
+import { CompositeRenderable, CustomRenderable } from '../renderer';
 
 /**
  * Generic entity class that represents any entity
  */
-export abstract class Entity extends RectangleRenderable {
+export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     static tick: number = 0;
     static serverTps: number = 0;
     private static lastTick: number = 0;
@@ -16,14 +16,12 @@ export abstract class Entity extends RectangleRenderable {
     vy: number = 0;
     va: number = 0;
 
-    constructor(id: number, x: number, y: number, width: number, height: number, color: string, angle?: number) {
+    constructor(id: number, x: number, y: number, angle?: number) {
         super({
             x: x,
             y: y,
-            width: width,
-            height: height,
-            color: color,
-            angle: angle
+            angle: angle,
+            components: []
         });
         this.id = id;
         this.tx = this.x;

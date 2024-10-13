@@ -86,8 +86,6 @@ export class QuadPoint implements LineRenderableQuad {
 export interface PathRenderable {
     /**Line/fill color */
     color: string;
-    /**Opacity of path */
-    opacity: number;
     /**Whether to attempt to fill the shape or not */
     fill: boolean;
     /**List of coordinate points in the line */
@@ -103,7 +101,6 @@ export interface PathRenderable {
 export class PathRenderable {
     constructor(init: Partial<PathRenderable>) {
         this.color = init.color ?? '#000000';
-        this.opacity = init.opacity ?? 1;
         this.fill = init.fill ?? false;
         this.points = init.points ?? [new LinearPoint(0, 0), new LinearPoint(0, 0)];
         this.join = init.join ?? 'miter';
@@ -947,6 +944,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     ctx.stroke();
                 }
                 // draw all textured entities with invalid textures
+                if (brokenTexturedRenderables.length > 0) console.warn(brokenTexturedRenderables.length + ' TexturedRenderables referencing nonexistant textures found!');
                 ctx.fillStyle = '#000';
                 for (const rect of brokenTexturedRenderables) {
                     if (rect.angle % twoPi == 0) {

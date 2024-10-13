@@ -3,7 +3,7 @@
 import { Socket } from 'socket.io-client';
 import { ref, watch } from 'vue';
 
-import RenderEngine, { type RenderEngineViewport, TexturedRenderable, RectangleRenderable, CustomRenderable, type RenderEngineMetrics } from '@/game/renderer';
+import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics } from '@/game/renderer';
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
@@ -18,10 +18,11 @@ const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
 const canvas = canvasRoot.children[0] instanceof HTMLCanvasElement ? canvasRoot.children[0] : document.createElement('canvas');
 canvasRoot.appendChild(canvas);
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 export const gameInstance = ref<GameInstance>();
 
-// map, misc entities, players/bullets, particles, above, ui
+// map below, misc entities, players/bullets, particles, map above, debug, ui
 // add particles "webgl" and replace ui 2d with "custom" later
 type renderLayers = ['offscreen2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
 
@@ -131,8 +132,8 @@ export class GameInstance {
                 if (e.key == 'Escape') e.target.blur();
                 return;
             }
-            e.preventDefault();
             const key = e.key.toLowerCase();
+            if ((key != 'i' && key != 'c') || !e.ctrlKey || !e.shiftKey) e.preventDefault();
             switch (key) {
                 case keybinds.up: ControlledPlayer.self.inputs.up = true; break;
                 case keybinds.down: ControlledPlayer.self.inputs.down = true; break;
@@ -178,33 +179,37 @@ export class GameInstance {
         return this.assetsLoaded;
     }
 
-    private readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
+    readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
     /**
      * Creates a new renderer instance.
      */
     private async loadRenderer(): Promise<void> {
         await GameMap.reloadMaps();
         this.renderEngine = new RenderEngine<renderLayers>(canvas, [
+            // map below
             {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
-                textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map((map) => map.texture)),
+                textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[0])),
                 smoothing: false,
                 culling: false
             },
+            // misc. entities
             {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
                 textures: []
             },
+            // players/bullets
             {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
                 textures: []
             },
+            // particles
             // {
             //     type: 'webgl',
             //     canvas: 1,
@@ -212,12 +217,16 @@ export class GameInstance {
             //     textures: [],
             //     clear: true
             // },
+            // map above, debug
             {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 0,
-                textures: [],
+                textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[1])),
+                smoothing: false,
+                culling: false
             },
+            // ui (replace with "custom" later)
             {
                 type: '2d',
                 canvas: 0,
@@ -236,7 +245,7 @@ export class GameInstance {
         if (this.renderEngine == undefined) return;
         // spaghetti metrics
         this.overlayRenderer.metrics = this.renderEngine.metrics;
-        if (ControlledPlayer.physicsTick % 40 == 0) {
+        if (ControlledPlayer.physicsTick % 20 == 0) {
             const start = performance.now();
             const token = Math.random();
             this.socket.emit('ping', token);
@@ -257,18 +266,33 @@ export class GameInstance {
             this.camera.angle = -ControlledPlayer.self.angle;
         }
         this.renderEngine.sendFrame(this.camera, [
+            // map below
             [new TexturedRenderable({
                 x: (GameMap.current?.width ?? 0) * 0.5,
                 y: (GameMap.current?.height ?? 0) * 0.5,
                 width: GameMap.current?.width ?? 0,
                 height: GameMap.current?.height ?? 0,
-                cropx: (await GameMap.current?.texture)?.width ?? 0,
-                cropy: (await GameMap.current?.texture)?.height ?? 0,
+                cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
+                cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
                 texture: GameMap.current?.index ?? 0
             })],
-            [...Array.from(Player.list.values())].map((e) => { e.lerp(t); return e; }),
-            [new RectangleRenderable({ x: 100, y: 100, angle: 0, color: 'blue' })],
+            // misc entities 
             [],
+            // players/bullets
+            [...Array.from(Player.list.values())].map((e) => { e.lerp(t); return e; }),
+            // particles
+            // [],
+            // map above, debug
+            [new TexturedRenderable({
+                x: (GameMap.current?.width ?? 0) * 0.5,
+                y: (GameMap.current?.height ?? 0) * 0.5,
+                width: GameMap.current?.width ?? 0,
+                height: GameMap.current?.height ?? 0,
+                cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
+                cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
+                texture: GameMap.current?.index ?? 0
+            }), ...(this.overlayRenderer.playerInfo ? (GameMap.current?.flatCollisionGrid ?? []) : [])],
+            // ui
             [this.overlayRenderer]
         ])
     }
@@ -281,6 +305,8 @@ export class GameInstance {
         this.socket.disconnect();
         gameInstance.value = undefined;
         Entity.serverTps = 1;
+        Entity.tick = 0;
+        ControlledPlayer.physicsTick = 0;
         Player.list.clear();
     }
 }
@@ -321,7 +347,7 @@ class UIOverlayRenderer extends CustomRenderable {
                     'Server:',
                     `  TPS: ${Entity.serverTps}`,
                     `  Tick: ${Entity.tick}/${ControlledPlayer.physicsTick}`,
-                    `  Ping: ${this.ping}`
+                    `  Ping: ${this.ping.toPrecision(3)}ms`
                 ] : [])
             ];
             ctx.fillStyle = '#0005';

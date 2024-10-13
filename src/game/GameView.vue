@@ -6,6 +6,7 @@ import { showFadeScreen } from '@/menu/nav';
 
 onMounted(() => {
     gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+    document.getElementById('gameView')?.addEventListener('contextmenu', (e) => e.preventDefault());
 });
 watch(gameInstance, () => {
     gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
@@ -13,7 +14,7 @@ watch(gameInstance, () => {
 </script>
 
 <template>
-    <div class="gameView">
+    <div class="gameView" id="gameView">
     </div>
 </template>
 
