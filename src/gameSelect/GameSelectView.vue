@@ -6,7 +6,7 @@ import { checkConnection, httpCodeToMessage, serverFetch } from '@/server';
 import * as Inputs from '@/components/inputs';
 import GameSelectBackground from './GameSelectBackground.vue';
 import { executeRecaptcha } from '@/login/recaptcha';
-import { GameInstance, gameInstance } from '@/game/game';
+import { GameInstance } from '@/game/game';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
 
 const pane = ref<'select' | 'create'>('select');
@@ -45,19 +45,20 @@ const loadGameList = async () => {
     if (res.status == 200) {
         gameList.value = await res.json();
     } else {
+        clearInterval(gameListRefreshTimer);
         await modal.showModal({
             title: 'Could not fetch game list',
             content: httpCodeToMessage(res.status),
             color: 'red'
         }).result;
         checkConnection();
-        clearInterval(gameListRefreshTimer);
     }
 };
 let gameListRefreshTimer: NodeJS.Timeout | undefined;
 onMounted(async () => {
     if (gameListRefreshTimer != undefined) clearInterval(gameListRefreshTimer);
     gameListRefreshTimer = setInterval(loadGameList, 10000);
+    gameList.value = [];
     await loadGameList();
     showFadeScreen.value = false;
 });
@@ -71,7 +72,7 @@ const joinGame = async (code: string) => {
     const res = await serverFetch('/games/joinGame/' + code, 'POST', { captcha: token });
     if (res.status == 200) {
         const { id, authCode } = await res.json();
-        gameInstance.value = new GameInstance(id, authCode);
+        new GameInstance(id, authCode);
     } else {
         joinGameWait.value = false;
         await modal.showModal({
@@ -89,7 +90,7 @@ const createGame = async () => {
     const res = await serverFetch('/games/createGame', 'POST', { ...options, captcha: token });
     if (res.status == 200) {
         const { id, authCode } = await res.json();
-        gameInstance.value = new GameInstance(id, authCode);
+        new GameInstance(id, authCode);
     } else {
         joinGameWait.value = false;
         await modal.showModal({

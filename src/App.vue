@@ -17,6 +17,10 @@ watch(() => modalComponent.value, () => {
     if (modalComponent.value != undefined) modal.setModal(modalComponent.value);
 });
 
+window.addEventListener('error', (err) => {
+    modal.showModal({ title: 'An error occured', content: `<span style="color: red;">${err.message}<br>${err.filename} ${err.lineno}:${err.colno}</span>`, color: 'red' });
+});
+
 watch(() => connectionState.loggedIn, () => {
     if (!connectionState.loggedIn) modal.showModal({
         title: 'Logged out',

@@ -1,11 +1,11 @@
-import { RectangleRenderable } from "../renderer";
+import { RectangleRenderable } from '../renderer';
 
 /**
  * Generic entity class that represents any entity
  */
 export abstract class Entity extends RectangleRenderable {
     static tick: number = 0;
-    static serverTps: number = 40;
+    static serverTps: number = 0;
     private static lastTick: number = 0;
 
     readonly id: number;
@@ -65,6 +65,9 @@ export abstract class Entity extends RectangleRenderable {
     }
 }
 
+/**
+ * All data necessary to create one entity from the server, fetched each tick.
+ */
 export interface EntityTickData {
     readonly id: number
     readonly x: number
@@ -74,3 +77,5 @@ export interface EntityTickData {
     readonly vy: number
     readonly va: number
 }
+
+export default Entity;

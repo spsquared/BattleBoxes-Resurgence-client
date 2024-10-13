@@ -6,6 +6,14 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: 'Source Code Pro';
+    font-weight: 200, 300, 400, 500, 600, 700, 800;
+    font-style: normal, italic;
+    src: url(./SourceCodePro.ttf) format('truetype');
+    font-display: swap;
+}
+
 body {
     font-family: 'Pixel', Arial, sans-serif;
     font-size: var(--font-12);

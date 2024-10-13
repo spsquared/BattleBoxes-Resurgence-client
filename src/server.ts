@@ -12,6 +12,7 @@ export const createNamespacedSocket = (namespace: string, auth?: string): Socket
             token: auth
         },
         withCredentials: true,
+        autoConnect: false,
         reconnection: false
     });
 };
@@ -69,6 +70,7 @@ export const checkConnection = async () => {
     } else {
         connectionState.connected = true;
         connectionState.connectionFailed = false;
+        connectionState.username = await (await serverFetch('/loginTest')).text();
     }
 };
 window.addEventListener('load', checkConnection);

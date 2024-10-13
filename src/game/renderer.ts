@@ -1,5 +1,3 @@
-// graphics engine
-
 /**
  * An entity with a custom `draw` function.
  */
@@ -231,6 +229,10 @@ export class TexturedRenderable {
         this.height = init.height ?? 100;
         this.angle = init.angle ?? 0;
         this.texture = init.texture ?? 0;
+        this.shiftx = init.shiftx ?? 0;
+        this.shifty = init.shifty ?? 0;
+        this.cropx = init.cropx ?? this.width - this.shiftx;
+        this.cropy = init.cropy ?? this.height - this.shifty;
     }
 }
 
@@ -405,6 +407,8 @@ export interface RenderEngineViewport {
     width: number
     /**Height of the viewport */
     height: number
+    /**Scale factor of items drawn in viewport */
+    scale: number
 }
 
 type Stats = { readonly avg: number, readonly min: number, readonly max: number };
@@ -484,7 +488,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         y: 0,
         angle: 0,
         width: 0,
-        height: 0
+        height: 0,
+        scale: 1
     };
 
     private cullDist = 500;
@@ -529,7 +534,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             // grab target canvases (typescript keeps messing up types for getContext buh)
             const targetCanvas = canvases[layer.target];
             if (targetCanvas == undefined) throw new RenderEngineError(`Invalid configuration: Target canvas ${layer.target} does not exist`);
-            const targetCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = targetCanvas.getContext('2d');
+            const targetCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = targetCanvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
             if (targetCtx === null) throw new RenderEngineError('Canvas2D context is not supported');
             // stuff that'll be used by all the layers
             const layerProps = {
@@ -632,6 +637,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 }
             }
         }
+        this.viewport.scale = viewport.scale;
         this.frame.length = 0;
         this.frame.push(...entities);
     }
@@ -660,10 +666,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         }));
         this.nextFrameCallbacks.clear();
         if (this.frame.length != this.layers.length) return;
-        const cullTop = this.viewport.y - this.viewport.height / 2 - this.cullDist;
-        const cullBottom = this.viewport.y + this.viewport.height / 2 + this.cullDist;
-        const cullLeft = this.viewport.x - this.viewport.width / 2 - this.cullDist;
-        const cullRight = this.viewport.x + this.viewport.width / 2 + this.cullDist;
+        const cullTop = this.viewport.y - this.viewport.height / 2 / this.viewport.scale - this.cullDist;
+        const cullBottom = this.viewport.y + this.viewport.height / 2 / this.viewport.scale + this.cullDist;
+        const cullLeft = this.viewport.x - this.viewport.width / 2 / this.viewport.scale - this.cullDist;
+        const cullRight = this.viewport.x + this.viewport.width / 2 / this.viewport.scale + this.cullDist;
         const twoPi = 2 * Math.PI;
         const start = performance.now();
         let sortTotal = 0;
@@ -684,8 +690,9 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 // center canvas onto viewport (optimization is actually kinda pointless)
-                ctx.translate(this.viewport.x + this.viewport.width / 2, -this.viewport.y + this.viewport.height / 2);
+                ctx.translate(this.viewport.x * this.viewport.scale + this.viewport.width / 2, -this.viewport.y * this.viewport.scale + this.viewport.height / 2);
                 if (this.viewport.angle % twoPi != 0) ctx.rotate(-this.viewport.angle);
+                ctx.scale(this.viewport.scale, this.viewport.scale);
                 ctx.save();
                 // flatten all composite renderables out into categories
                 // immediately draw all custom renderables
@@ -699,15 +706,15 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     if (entity instanceof CompositeRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
                         compositeRenderableStack.push(entity);
+                    } else if (entity instanceof TexturedRenderable) {
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (textures[entity.texture] === undefined) brokenTexturedRenderables.push(entity);
+                        else texturedRenderables.push(entity);
                     } else if (entity instanceof RectangleRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
                         const bucket = simpleRenderableBuckets.get(entity.color);
                         if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[entity], [], [], [], []]);
                         else bucket[0].push(entity);
-                    } else if (entity instanceof TexturedRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
-                        if (textures[entity.texture] === undefined) brokenTexturedRenderables.push(entity);
-                        else texturedRenderables.push(entity);
                     } else if (entity instanceof TextRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
                         const bucket = simpleRenderableBuckets.get(entity.color);
@@ -748,17 +755,17 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             compositeRenderableStack.push();
+                        } else if (entity instanceof TexturedRenderable) {
+                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
+                            else texturedRenderables.push(transformed);
                         } else if (entity instanceof RectangleRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
                             const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[transformed], [], [], [], []]);
                             else bucket[0].push(transformed);
-                        } else if (entity instanceof TexturedRenderable) {
-                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
-                            if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
-                            else texturedRenderables.push(transformed);
                         } else if (entity instanceof TextRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
                             const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
