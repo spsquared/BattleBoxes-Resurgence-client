@@ -56,7 +56,7 @@ export class GameInstance {
         if (gameInstance.value !== undefined) throw new Error('Game Instance already exists!');
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
-        this.socket.on('join', () => startTransitionTo('game'));
+        startTransitionTo('game');
         this.loadPromise = this.loadRenderer();
         this.onResize();
         const resizeListener = () => this.onResize();

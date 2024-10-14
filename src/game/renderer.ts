@@ -647,7 +647,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         return {
             ...entity,
             x: parent.x + entity.x * cosVal - entity.y * sinVal,
-            y: parent.y - entity.x * sinVal - entity.y * cosVal,
+            y: parent.y - entity.x * sinVal + entity.y * cosVal,
             angle: (parent.angle) + (entity.angle)
         };
     }
@@ -749,23 +749,23 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     const customComponents: (CustomRenderable | CustomReadRenderable)[] = [];
                     for (const entity of compositeEntity.components) {
                         if (entity instanceof CompositeRenderable) {
-                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             compositeRenderableStack.push();
                         } else if (entity instanceof TexturedRenderable) {
-                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
                             else texturedRenderables.push(transformed);
                         } else if (entity instanceof RectangleRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
-                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[transformed], [], [], [], []]);
                             else bucket[0].push(transformed);
                         } else if (entity instanceof TextRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
-                            const transformed = this.transformRenderable(entity, compositeEntity, sinVal, cosVal);
+                            const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [transformed], []]);
                             else bucket[3].push(transformed);

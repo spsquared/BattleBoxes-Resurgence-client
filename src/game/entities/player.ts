@@ -1,4 +1,4 @@
-import { LinearPoint, PathRenderable, RectangleRenderable } from '@/game/renderer';
+import { LinearPoint, PathRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
 import { connectionState } from '@/server';
 
 import gameInstance from '../game';
@@ -21,9 +21,10 @@ export class Player extends Entity {
 
     constructor(id: number, username: string, x: number, y: number, color: string) {
         super(id, x, y);
+        this.username = username;
         this.color = color;
         this.components.push(new RectangleRenderable({ width: this.width, height: this.height, color: this.color }));
-        this.username = username;
+        this.components.push(new TextRenderable({ text: this.username, x: 0, y: 0.6, size: 0.2, align: 'center' }))
         if (Player.list.has(this.username)) throw new Error(`Duplicate Player "${this.username}"!`);
         Player.list.set(this.username, this);
     }
@@ -92,12 +93,13 @@ export class ControlledPlayer extends Player {
             top: 0,
             bottom: 0
         };
-    readonly contactEdgeLineOffset
+    readonly contactEdgeLineOffset: number;
 
     static baseProperties: ControlledPlayer['properties'] = {
         gravity: 0,
         movePower: 0,
         jumpPower: 0,
+        wallJumpPower: 0,
         airMovePower: 0,
         drag: 0,
         airDrag: 0,
@@ -108,6 +110,7 @@ export class ControlledPlayer extends Player {
         gravity: number
         movePower: number
         jumpPower: number
+        wallJumpPower: number
         airMovePower: number
         drag: number
         airDrag: number
@@ -117,6 +120,7 @@ export class ControlledPlayer extends Player {
             gravity: ControlledPlayer.baseProperties.gravity,
             movePower: ControlledPlayer.baseProperties.movePower,
             jumpPower: ControlledPlayer.baseProperties.jumpPower,
+            wallJumpPower: ControlledPlayer.baseProperties.wallJumpPower,
             airMovePower: ControlledPlayer.baseProperties.airMovePower,
             drag: ControlledPlayer.baseProperties.drag,
             airDrag: ControlledPlayer.baseProperties.airDrag,
@@ -175,13 +179,13 @@ export class ControlledPlayer extends Player {
         this.vy *= this.properties.airDrag;
         // apply input velocity
         const moveInput = ((this.inputs.right ? 1 : 0) - (this.inputs.left ? 1 : 0));
-        console.log(this.contactEdges.bottom, this.contactEdges.top, this.contactEdges.left, this.contactEdges.right)
         if (this.contactEdges.left * moveInput < 0 || this.contactEdges.right * moveInput > 0) {
             const friction = this.contactEdges.left + this.contactEdges.right;
             this.vy *= Math.pow(this.properties.wallDrag, friction);
             if (this.inputs.up || this.inputs.down) {
-                this.vx += -moveInput * this.properties.movePower * this.properties.grip * friction;
-                if (this.inputs.up) this.vy += this.properties.jumpPower * this.properties.grip * friction;
+                const jumpPower = this.properties.jumpPower * this.properties.grip * friction;
+                this.vx -= moveInput * jumpPower * this.properties.wallJumpPower;
+                if (this.inputs.up) this.vy += jumpPower;
             }
         } else if (this.contactEdges.bottom != 0) {
             this.vx += moveInput * this.properties.movePower * this.properties.grip * this.contactEdges.bottom;
@@ -278,6 +282,8 @@ export class ControlledPlayer extends Player {
         for (let cy = sy; cy <= ey; cy++) {
             for (let cx = sx; cx <= ex; cx++) {
                 for (const col of GameMap.current.collisionGrid[cy][cx]) {
+
+                    // BORK!!!
                     if (Math.abs(x - col.x) <= this.halfBoundingWidth + col.halfBoundingWidth && Math.abs(y - col.y) <= this.halfBoundingHeight + col.halfBoundingHeight) {
                         for (const p of vertices) {
                             if (col.points.every((q, i) => ControlledPlayer.isWithin(p, q, col.points[(i + 1) % col.points.length]))) {
