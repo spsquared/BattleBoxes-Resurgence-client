@@ -161,7 +161,13 @@ export class ControlledPlayer extends Player {
     }
 
     tick(packet: PlayerTickData): void {
-        super.tick(packet);
+        if (packet.overridePosition) {
+            super.tick(packet);
+            console.log('OVERRIDE')
+        } else {
+            this.color = packet.color;
+            (this.components[0] as RectangleRenderable).color = this.color;
+        }
         this.properties = packet.properties;
         this.modifiers = packet.modifiers;
     }
@@ -236,7 +242,11 @@ export class ControlledPlayer extends Player {
         gameInstance.value?.socket.emit('tick', {
             tick: ControlledPlayer.physicsTick,
             modifiers: this.modifiers.map((mod) => mod.id),
-            inputs: this.inputs
+            inputs: this.inputs,
+            position: {
+                endx: this.x,
+                endy: this.y
+            }
         } satisfies ControlledPlayerTickInput);
         this.lastPhysicsTick = performance.now();
     }
@@ -398,6 +408,7 @@ export interface PlayerTickData extends EntityTickData {
     readonly color: string
     readonly properties: ControlledPlayer['properties']
     readonly modifiers: ControlledPlayer['modifiers']
+    readonly overridePosition: boolean
 }
 
 export interface Point {
@@ -431,6 +442,11 @@ export interface ControlledPlayerTickInput {
     readonly modifiers: number[]
     /**All inputs being held for that tick */
     readonly inputs: ControlledPlayer['inputs']
+    /**Position of player at end of tick (for verification of player position) */
+    readonly position: {
+        endx: number
+        endy: number
+    }
 }
 
 /**

@@ -302,6 +302,7 @@ export class GameInstance {
         this.renderEngine?.stop();
         this.socket.disconnect();
         gameInstance.value = undefined;
+        (window as any).gameInstance = undefined;
         Entity.serverTps = 1;
         Entity.tick = 0;
         ControlledPlayer.physicsTick = 0;
@@ -388,3 +389,14 @@ export const keybinds = {
 };
 
 export default gameInstance;
+
+// if (import.meta.env.DEV) {
+//     console.info('Development mode enabled, exposing game instances');
+//     const existing = (window as any).gameInstance;
+//     if (existing != undefined) gameInstance.value = existing;
+//     watch(gameInstance, () => {
+//         (window as any).gameInstance = gameInstance.value;
+//         console.log((window as any).gameInstance)
+//     });
+//     (window as any).gameInstance = gameInstance.value;
+// }
