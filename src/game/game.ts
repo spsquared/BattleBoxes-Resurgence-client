@@ -140,8 +140,8 @@ export class GameInstance {
                 case keybinds.left: ControlledPlayer.self.inputs.left = true; break;
                 case keybinds.right: ControlledPlayer.self.inputs.right = true; break;
                 case '\\':
-                    if (e.ctrlKey) this.overlayRenderer.detailed = !this.overlayRenderer.detailed;
-                    else this.overlayRenderer.playerInfo = !this.overlayRenderer.playerInfo;
+                    if (e.ctrlKey) this.overlayRenderer.playerInfo = !this.overlayRenderer.playerInfo;
+                    else this.overlayRenderer.detailed = !this.overlayRenderer.detailed;
                     break;
             }
         };
