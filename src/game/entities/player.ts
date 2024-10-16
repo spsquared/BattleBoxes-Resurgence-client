@@ -68,6 +68,7 @@ export class ControlledPlayer extends Player {
     static get tick(): number { return Entity.tick; }
     static physicsTick: number = 0;
     static physicsResolution: number = 64;
+    static physicsBuffer: number = 0.01;
     static self?: ControlledPlayer;
 
     gridx: number;
@@ -205,7 +206,7 @@ export class ControlledPlayer extends Player {
             if (this.contactEdges.left * moveInput < 0 || this.contactEdges.right * moveInput > 0) {
                 const friction = this.contactEdges.left + this.contactEdges.right;
                 this.vy *= Math.pow(this.properties.wallDrag, friction);
-                if (this.inputs.up || this.inputs.down) {
+                if (this.inputs.up || (this.inputs.down && this.contactEdges.bottom == 0)) {
                     const jumpPower = this.properties.jumpPower * this.properties.grip * friction;
                     this.vx -= moveInput * jumpPower * this.properties.wallJumpPower;
                     if (this.inputs.up) this.vy += jumpPower;
@@ -256,7 +257,8 @@ export class ControlledPlayer extends Player {
             dx: this.vx / steps,
             dy: this.vy / steps
         };
-        const collisionGap = 1.01;
+        const bufferX = ControlledPlayer.physicsBuffer * Math.log2(this.x);
+        const bufferY = ControlledPlayer.physicsBuffer * Math.log2(this.y);
         for (let i = step; i <= 1 && (pos.dx != 0 || pos.dy != 0); i += step) {
             pos.lx = pos.x;
             pos.ly = pos.y;
@@ -268,16 +270,16 @@ export class ControlledPlayer extends Player {
                 if (col2 !== null) {
                     const col3 = this.collidesWithMap(pos.lx, pos.y);
                     if (col3 !== null) {
-                        pos.x = pos.lx = col3.x + (pos.x - col3.x < 0 ? -collisionGap : collisionGap) * (col3.halfBoundingWidth + this.halfBoundingWidth);
-                        pos.y = pos.ly = col3.y + (pos.y - col3.y < 0 ? -collisionGap : collisionGap) * (col3.halfBoundingHeight + this.halfBoundingHeight);
+                        pos.x = pos.lx = col3.x + (pos.x - col3.x < 0 ? -1 : 1) * (col3.halfBoundingWidth + this.halfBoundingWidth + bufferX);
+                        pos.y = pos.ly = col3.y + (pos.y - col3.y < 0 ? -1 : 1) * (col3.halfBoundingHeight + this.halfBoundingHeight + bufferY);
                         pos.dx = this.vx = 0;
                         pos.dy = this.vy = 0;
                     } else {
-                        pos.x = pos.lx = col2.x + (pos.x - col2.x < 0 ? -collisionGap : collisionGap) * (col2.halfBoundingWidth + this.halfBoundingWidth);
+                        pos.x = pos.lx = col2.x + (pos.x - col2.x < 0 ? -1 : 1) * (col2.halfBoundingWidth + this.halfBoundingWidth + bufferX);
                         pos.dx = this.vx = 0;
                     }
                 } else {
-                    pos.y = pos.ly = col1.y + (pos.y - col1.y < 0 ? -collisionGap : collisionGap) * (col1.halfBoundingHeight + this.halfBoundingHeight);
+                    pos.y = pos.ly = col1.y + (pos.y - col1.y < 0 ? -1 : 1) * (col1.halfBoundingHeight + this.halfBoundingHeight + bufferY);
                     pos.dy = this.vy = 0;
                 }
             }
@@ -286,11 +288,12 @@ export class ControlledPlayer extends Player {
         this.y = pos.y;
         this.angle += this.va;
         this.calculateCollisionInfo();
-        const invRes = 1 / ControlledPlayer.physicsResolution;
-        this.contactEdges.left = this.collidesWithMap(this.x - invRes, this.y)?.friction ?? 0;
-        this.contactEdges.right = this.collidesWithMap(this.x + invRes, this.y)?.friction ?? 0;
-        this.contactEdges.top = this.collidesWithMap(this.x, this.y + invRes)?.friction ?? 0;
-        this.contactEdges.bottom = this.collidesWithMap(this.x, this.y - invRes)?.friction ?? 0;
+        const shiftX = (1 + bufferX) / ControlledPlayer.physicsResolution;
+        const shiftY = (1 + bufferY) / ControlledPlayer.physicsResolution;
+        this.contactEdges.left = this.collidesWithMap(this.x - shiftX, this.y)?.friction ?? 0;
+        this.contactEdges.right = this.collidesWithMap(this.x + shiftX, this.y)?.friction ?? 0;
+        this.contactEdges.top = this.collidesWithMap(this.x, this.y + shiftY)?.friction ?? 0;
+        this.contactEdges.bottom = this.collidesWithMap(this.x, this.y - shiftY)?.friction ?? 0;
     }
 
     /**

@@ -89,10 +89,11 @@ export class GameInstance {
         });
         // socket stuff
         this.socket.on('tick', (tick) => this.onTick(tick));
-        this.socket.on('initPlayerPhysics', (init: { tick: number, physicsResolution: number, playerProperties: ControlledPlayer['properties'] }) => {
+        this.socket.on('initPlayerPhysics', (init: { tick: number, physicsBuffer: number, physicsResolution: number, playerProperties: ControlledPlayer['properties'] }) => {
             ControlledPlayer.physicsTick = init.tick;
-            ControlledPlayer.baseProperties = init.playerProperties;
             ControlledPlayer.physicsResolution = init.physicsResolution;
+            ControlledPlayer.physicsBuffer = init.physicsBuffer;
+            ControlledPlayer.baseProperties = init.playerProperties;
         });
         gameInstance.value = this;
         // connect once loading finishes
