@@ -51,7 +51,7 @@ function click() {
 }
 
 .uiButton:disabled {
-    border-color: #888 !important;
+    border-color: #555 !important;
     transform: none !important;
     opacity: 1;
     cursor: not-allowed;

@@ -63,7 +63,6 @@ export class GameInstance {
         window.addEventListener('resize', resizeListener);
         watch(gameInstance, () => {
             if (gameInstance.value?.instanceId !== this.instanceId) {
-                this.destroy();
                 window.removeEventListener('resize', resizeListener);
             }
         });
@@ -192,8 +191,7 @@ export class GameInstance {
                 canvas: 1,
                 target: 1,
                 textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[0])),
-                smoothing: false,
-                culling: false
+                smoothing: false
             },
             // misc. entities
             {
@@ -223,8 +221,7 @@ export class GameInstance {
                 canvas: 1,
                 target: 0,
                 textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[1])),
-                smoothing: false,
-                culling: false
+                smoothing: false
             },
             // ui (replace with "custom" later)
             {
@@ -374,7 +371,7 @@ class UIOverlayRenderer extends CustomRenderable {
                     `(${ControlledPlayer.self.vx.toFixed(3)}, ${ControlledPlayer.self.vy.toFixed(3)}) VEL`
                 ];
                 ctx.fillStyle = '#0005';
-                for (let i = 0; i < lines.length; i++) ctx.fillRect(-4, i * 16 + 8, -ctx.measureText(lines[i]).width + 4, 16);
+                for (let i = 0; i < lines.length; i++) ctx.fillRect(-4, i * 16 + 8, -ctx.measureText(lines[i]).width - 4, 16);
                 ctx.fillStyle = '#fff';
                 for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], -6, i * 16 + 10);
             }
@@ -390,13 +387,3 @@ export const keybinds = {
 };
 
 export default gameInstance;
-
-if (import.meta.env.DEV) {
-    console.info('Development mode enabled, exposing game instances');
-    const existing = (window as any).gameInstance;
-    if (existing != undefined) gameInstance.value = existing;
-    watch(gameInstance, () => {
-        (window as any).gameInstance = gameInstance.value;
-    });
-    (window as any).gameInstance = gameInstance.value;
-}

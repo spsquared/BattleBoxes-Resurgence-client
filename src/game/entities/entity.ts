@@ -6,12 +6,15 @@ import { CompositeRenderable, CustomRenderable } from '../renderer';
 export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     static tick: number = 0;
     static serverTps: number = 0;
-    private static lastTick: number = 0;
+    static lastTick: number = 0;
 
     readonly id: number;
     tx: number;
     ty: number;
     ta: number;
+    ix: number;
+    iy: number;
+    ia: number;
     vx: number = 0;
     vy: number = 0;
     va: number = 0;
@@ -24,9 +27,9 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
             components: []
         });
         this.id = id;
-        this.tx = this.x;
-        this.ty = this.y;
-        this.ta = this.angle;
+        this.ix = this.tx = this.x;
+        this.iy = this.ty = this.y;
+        this.ia = this.ta = this.angle;
     }
 
     /**
@@ -35,9 +38,12 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
      */
     lerp(time: number): void {
         const t = (time - Entity.lastTick) * Entity.serverTps / 1000;
-        this.x = this.tx + this.vx * t;
-        this.y = this.ty + this.vy * t;
-        this.angle = this.ta + this.va * t;
+        this.ix = 0.7 * this.ix + 0.3 * this.tx;
+        this.iy = 0.7 * this.iy + 0.3 * this.ty;
+        this.ia = 0.7 * this.ia + 0.3 * this.ta;
+        this.x = this.ix + this.vx * t;
+        this.y = this.iy + this.vy * t;
+        this.angle = this.ia + this.va * t;
     }
 
     /**
@@ -45,9 +51,9 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
      * @param packet Update data from server
      */
     tick(packet: EntityTickData): void {
-        this.tx = this.x = packet.x;
-        this.ty = this.y = packet.y;
-        this.ta = this.angle = packet.angle;
+        this.tx = packet.x;
+        this.ty = packet.y;
+        this.ta = packet.angle;
         this.vx = packet.vx;
         this.vy = packet.vy;
         this.va = packet.va;

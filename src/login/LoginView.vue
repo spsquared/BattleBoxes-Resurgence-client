@@ -69,8 +69,8 @@ const signup = async () => {
                         <span style="color: #F00; font-size: var(--font-subtitle); line-height: 0.5em;">Resurgence</span>
                     </div>
                     <form :class="{ loginForm: true, loginFormHidden: !connectionState.connected }" action="javascript:void(0)">
-                        <Inputs.TextBox v-model="username" placeholder="Username" width="200px" title="Username (alphanumeric and/or dash/underscore)" maxlength="16" autocomplete="username" autocapitalize="off" highlight-invalid required></Inputs.TextBox>
-                        <Inputs.TextBox v-model="password" placeholder="Password" type="password" width="200px" title="Password" maxlength="128" autocomplete="current-password" required></Inputs.TextBox>
+                        <Inputs.TextBox v-model="username" placeholder="Username" width="200px" title="Username (alphanumeric and/or dash/underscore)" maxlength="16" autocomplete="username" autocapitalize="off" highlight-invalid required :disabled="waitForLogin"></Inputs.TextBox>
+                        <Inputs.TextBox v-model="password" placeholder="Password" type="password" width="200px" title="Password" maxlength="128" autocomplete="current-password" required :disabled="waitForLogin"></Inputs.TextBox>
                         <span style="text-wrap: nowrap;">
                             <Inputs.TextButton text="Log in" @click="login()" width="96px" type="submit" background-color="#0C0" :disabled="waitForLogin"></Inputs.TextButton>
                             <Inputs.TextButton text="Sign Up" @click="signup()" width="96px" type="submit" background-color="dodgerblue" :disabled="waitForLogin"></Inputs.TextButton>

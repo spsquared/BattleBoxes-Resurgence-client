@@ -96,6 +96,8 @@ export interface PathRenderable {
     cap: CanvasLineCap;
     /**Thickness of path lines (setting this to 0 skips the line) */
     lineWidth: number
+    /**Whether to close the shape with a line back to the first point or not */
+    close: boolean
 }
 
 export class PathRenderable {
@@ -106,6 +108,7 @@ export class PathRenderable {
         this.join = init.join ?? 'miter';
         this.cap = init.cap ?? 'butt';
         this.lineWidth = init.lineWidth ?? 1;
+        this.close = init.close ?? false;
     }
 }
 
@@ -940,6 +943,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                     break;
                             }
                         }
+                        if (line.close) ctx.lineTo(line.points[0].x, -line.points[0].y);
                     }
                     ctx.stroke();
                 }

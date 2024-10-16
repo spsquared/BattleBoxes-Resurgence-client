@@ -2,6 +2,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { reactive } from 'vue';
+import { currentPage } from './menu/nav';
 
 export const serverHostname = process.env.NODE_ENV == 'production' ? '' : 'https://localhost:9000';
 
@@ -67,6 +68,7 @@ export const checkConnection = async () => {
     if (res.status == 0) {
         connectionState.connectionFailed = true;
         setTimeout(checkConnection, 5000);
+        currentPage.value = 'menu';
     } else {
         connectionState.connected = true;
         connectionState.connectionFailed = false;
