@@ -1,4 +1,4 @@
-import { CompositeRenderable, CustomRenderable } from '../renderer';
+import { CompositeRenderable, type CustomRenderable } from '@/game/renderer';
 
 /**
  * Generic entity class that represents any entity
@@ -6,6 +6,7 @@ import { CompositeRenderable, CustomRenderable } from '../renderer';
 export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     static tick: number = 0;
     static serverTps: number = 0;
+    static avgServerTps: number = 0;
     static lastTick: number = 0;
 
     readonly id: number;
@@ -19,14 +20,13 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     vy: number = 0;
     va: number = 0;
 
-    constructor(id: number, x: number, y: number, angle?: number) {
+    constructor(data: EntityTickData) {
         super({
-            x: x,
-            y: y,
-            angle: angle,
-            components: []
+            x: data.x,
+            y: data.y,
+            angle: data.angle
         });
-        this.id = id;
+        this.id = data.id;
         this.ix = this.tx = this.x;
         this.iy = this.ty = this.y;
         this.ia = this.ta = this.angle;

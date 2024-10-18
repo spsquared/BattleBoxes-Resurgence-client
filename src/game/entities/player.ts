@@ -1,11 +1,12 @@
+import gameInstance from '@/game/game';
 import { LinearPoint, PathRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
 import { connectionState } from '@/server';
 
-import gameInstance from '../game';
 import GameMap, { MapCollision } from '../map';
 import Entity from './entity';
 
 import type { EntityTickData } from './entity';
+
 /**
  * Uncontrolled player entity.
  */
@@ -17,22 +18,46 @@ export class Player extends Entity {
     readonly username: string;
     width: number = 0.75;
     height: number = 0.75;
-    color: string
+    color: string;
+    hp: number;
+    maxHp: number;
+    private readonly healthBarRenderable: RectangleRenderable;
 
-    constructor(id: number, username: string, x: number, y: number, color: string) {
-        super(id, x, y);
-        this.username = username;
-        this.color = color;
-        this.components.push(new RectangleRenderable({ width: this.width, height: this.height, color: this.color }));
-        this.components.push(new TextRenderable({ text: this.username, x: 0, y: 0.6, size: 0.2, align: 'center' }))
+    constructor(data: PlayerTickData) {
+        super(data);
+        this.username = data.username;
         if (Player.list.has(this.username)) throw new Error(`Duplicate Player "${this.username}"!`);
+        this.color = data.color;
+        this.hp = data.hp;
+        this.maxHp = data.maxHp;
+        this.components.push(new RectangleRenderable({ width: this.width, height: this.height, color: this.color }));
+        this.components.push(new TextRenderable({ text: this.username, x: 0, y: 0.65, size: 0.2, align: 'center' }))
+        this.healthBarRenderable = new RectangleRenderable({ y: 0.5, height: 0.1 });
+        this.components.push(this.healthBarRenderable);
+        this.updateHpBar();
         Player.list.set(this.username, this);
     }
 
     tick(packet: PlayerTickData): void {
         super.tick(packet);
         this.color = packet.color;
+        this.hp = packet.hp;
+        this.maxHp = packet.maxHp;
         (this.components[0] as RectangleRenderable).color = this.color;
+        this.updateHpBar();
+    }
+
+    updateHpBar(): void {
+        this.healthBarRenderable.width = this.hp / this.maxHp;
+        this.healthBarRenderable.x = -0.5 + this.healthBarRenderable.width / 2;
+        this.healthBarRenderable.color = `hsl(${(this.hp - 1) / (this.maxHp - 1) * 120}deg, 100%, 50%)`;
+    }
+
+    /**
+     * Removes the player from the player list
+     */
+    remove(): void {
+        Player.list.delete(this.username);
     }
 
     /**
@@ -48,15 +73,13 @@ export class Player extends Entity {
                 updated.add(player);
             } else {
                 const playerConstructor = (uPlayer.username == connectionState.username) ? ControlledPlayer : Player
-                const newPlayer = new playerConstructor(uPlayer.id, uPlayer.username, uPlayer.x, uPlayer.y, uPlayer.color);
-                Player.list.set(newPlayer.username, newPlayer);
+                const newPlayer = new playerConstructor(uPlayer);
                 newPlayer.tick(uPlayer);
                 updated.add(newPlayer);
-                if (newPlayer instanceof ControlledPlayer) ControlledPlayer.self = newPlayer;
             }
         }
-        for (const [username, player] of Player.list) {
-            if (!updated.has(player)) Player.list.delete(username);
+        for (const player of Player.list.values()) {
+            if (!updated.has(player)) player.remove();
         }
     }
 }
@@ -138,17 +161,22 @@ export class ControlledPlayer extends Player {
         right: boolean
         up: boolean
         down: boolean
+        primary: boolean
+        secondary: boolean
+        mouseAngle: number
     } = {
             left: false,
             right: false,
             up: false,
-            down: false
+            down: false,
+            primary: false,
+            secondary: false,
+            mouseAngle: 0
         };
 
-    private lastPhysicsTick: number = 0;
-
-    constructor(id: number, username: string, x: number, y: number, color: string) {
-        super(id, username, x, y, color);
+    constructor(data: PlayerTickData) {
+        super(data);
+        if (ControlledPlayer.self !== undefined) throw new Error('Cannot have two ControlledPlayer instances!');
         this.gridx = Math.floor(this.x);
         this.gridy = Math.floor(this.y);
         this.contactEdgeLineOffset = this.components.length;
@@ -158,18 +186,7 @@ export class ControlledPlayer extends Player {
             new PathRenderable({ points: [new LinearPoint(-this.width / 2, -this.height / 2), new LinearPoint(this.width / 2, -this.height / 2)], color: '#rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
             new PathRenderable({ points: [new LinearPoint(-this.width / 2, this.height / 2), new LinearPoint(this.width / 2, this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
         );
-    }
-
-    tick(packet: PlayerTickData): void {
-        if (packet.overridePosition) {
-            super.tick(packet);
-            console.log('OVERRIDE')
-        } else {
-            this.color = packet.color;
-            (this.components[0] as RectangleRenderable).color = this.color;
-        }
-        this.properties = packet.properties;
-        this.modifiers = packet.modifiers;
+        ControlledPlayer.self = this;
     }
 
     lerp(time: number): void {
@@ -177,6 +194,20 @@ export class ControlledPlayer extends Player {
         // this.x = this.tx + this.vx * t;
         // this.y = this.ty + this.vy * t;
         // this.angle = this.ta + this.va * t;
+    }
+
+    tick(packet: PlayerTickData): void {
+        if (packet.overridePosition) {
+            super.tick(packet);
+        } else {
+            this.color = packet.color;
+            this.hp = packet.hp;
+            this.maxHp = packet.maxHp;
+            (this.components[0] as RectangleRenderable).color = this.color;
+            this.updateHpBar();
+        }
+        this.properties = packet.properties;
+        this.modifiers = packet.modifiers;
     }
 
     /**
@@ -211,7 +242,7 @@ export class ControlledPlayer extends Player {
             const moveInput = ((this.inputs.right ? 1 : 0) - (this.inputs.left ? 1 : 0));
             if (this.contactEdges.left * moveInput < 0 || this.contactEdges.right * moveInput > 0) {
                 const friction = this.contactEdges.left + this.contactEdges.right;
-                this.vy *= Math.pow(this.properties.wallDrag, friction);
+                if (this.vy < 0) this.vy *= Math.pow(this.properties.wallDrag, friction);
                 if (this.inputs.up || (this.inputs.down && this.contactEdges.bottom == 0)) {
                     const jumpPower = this.properties.jumpPower * this.properties.grip * friction;
                     this.vx -= moveInput * jumpPower * this.properties.wallJumpPower;
@@ -248,7 +279,6 @@ export class ControlledPlayer extends Player {
                 endy: this.y
             }
         } satisfies ControlledPlayerTickInput);
-        this.lastPhysicsTick = performance.now();
     }
 
     /**
@@ -256,7 +286,7 @@ export class ControlledPlayer extends Player {
      * Note that translations are calculated first, then rotations.
      */
     nextPosition(): void {
-        this.calculateCollisionInfo();
+        this.contactEdges.left = this.contactEdges.right = this.contactEdges.top = this.contactEdges.bottom = 0;
         const steps = Math.max(Math.abs(this.vx), Math.abs(this.vy)) * ControlledPlayer.physicsResolution;
         const step = 1 / steps;
         const pos = {
@@ -282,13 +312,20 @@ export class ControlledPlayer extends Player {
                         pos.y = pos.ly;
                         pos.dx = this.vx = 0;
                         pos.dy = this.vy = 0;
+                        this.contactEdges.left = this.contactEdges.right = this.contactEdges.top = this.contactEdges.bottom = col3.friction;
                     } else {
-                        pos.x = pos.lx = col2.x + (pos.x - col2.x < 0 ? -1 : 1) * (col2.halfBoundingWidth + this.halfBoundingWidth + ControlledPlayer.physicsBuffer);
+                        const dir = pos.x - col2.x < 0
+                        pos.x = pos.lx = col2.x + (dir ? -1 : 1) * (col2.halfBoundingWidth + this.halfBoundingWidth + ControlledPlayer.physicsBuffer);
                         pos.dx = this.vx = 0;
+                        if (dir) this.contactEdges.right = col2.friction;
+                        else this.contactEdges.left = col2.friction;
                     }
                 } else {
-                    pos.y = pos.ly = col1.y + (pos.y - col1.y < 0 ? -1 : 1) * (col1.halfBoundingHeight + this.halfBoundingHeight + ControlledPlayer.physicsBuffer);
+                    const dir = pos.y - col1.y < 0;
+                    pos.y = pos.ly = col1.y + (dir ? -1 : 1) * (col1.halfBoundingHeight + this.halfBoundingHeight + ControlledPlayer.physicsBuffer);
                     pos.dy = this.vy = 0;
+                    if (dir) this.contactEdges.top = col1.friction;
+                    else this.contactEdges.bottom = col1.friction;
                 }
             }
         }
@@ -296,11 +333,6 @@ export class ControlledPlayer extends Player {
         this.y = pos.y;
         this.angle += this.va;
         this.calculateCollisionInfo();
-        const shift = 1 / ControlledPlayer.physicsResolution + ControlledPlayer.physicsBuffer;
-        this.contactEdges.left = this.collidesWithMap(this.x - shift, this.y)?.friction ?? 0;
-        this.contactEdges.right = this.collidesWithMap(this.x + shift, this.y)?.friction ?? 0;
-        this.contactEdges.top = this.collidesWithMap(this.x, this.y + shift)?.friction ?? 0;
-        this.contactEdges.bottom = this.collidesWithMap(this.x, this.y - shift)?.friction ?? 0;
     }
 
     /**
@@ -362,7 +394,7 @@ export class ControlledPlayer extends Player {
      * Calculates essential values for collisions that would otherwise be redundantly calculated. MUST
      * be called after any angle, position, or size changes or some collisions will behave weirdly!
      */
-    calculateCollisionInfo() {
+    calculateCollisionInfo(): void {
         this.gridx = Math.floor(this.x);
         this.gridy = Math.floor(this.y);
         this.cosVal = Math.cos(this.angle);
@@ -377,6 +409,11 @@ export class ControlledPlayer extends Player {
         this.vertices[1] = { x: this.x + this.cosVal * hWidth + this.sinVal * hHeight, y: this.y + this.cosVal * hWidth + this.sinVal * hHeight };
         this.vertices[2] = { x: this.x + this.cosVal * hWidth - this.sinVal * hHeight, y: this.y - this.cosVal * hWidth - this.sinVal * hHeight };
         this.vertices[3] = { x: this.x - this.cosVal * hWidth - this.sinVal * hHeight, y: this.y - this.cosVal * hWidth - this.sinVal * hHeight };
+    }
+
+    remove(): void {
+        super.remove();
+        ControlledPlayer.self = undefined;
     }
 
     /**
@@ -409,13 +446,21 @@ export interface PlayerTickData extends EntityTickData {
     readonly properties: ControlledPlayer['properties']
     readonly modifiers: ControlledPlayer['modifiers']
     readonly overridePosition: boolean
+    readonly hp: number
+    readonly maxHp: number
 }
 
+/**
+ * A point in 2D space
+ */
 export interface Point {
     x: number
     y: number
 }
 
+/**
+ * A collidable entity for player physics.
+ */
 export class Collidable extends PathRenderable {
     x: number;
     y: number;
@@ -423,7 +468,7 @@ export class Collidable extends PathRenderable {
     halfBoundingHeight: number;
 
     constructor(x: number, y: number, hw: number, hh: number, points: PathRenderable['points'], dispColor: string) {
-        super({ points: points, color: dispColor, lineWidth: 2 / ControlledPlayer.physicsResolution, close: true });
+        super({ points: points, color: dispColor, lineWidth: 0.04, close: true });
         this.x = x;
         this.y = y;
         this.halfBoundingWidth = hw;

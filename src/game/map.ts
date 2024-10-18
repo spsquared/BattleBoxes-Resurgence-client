@@ -1,7 +1,7 @@
+import { loadTexture } from '@/game/game';
 import { serverFetch } from '@/server';
 
 import { Collidable } from './entities/player';
-import { loadTexture } from './game';
 
 /**
  * Global map loader that creates and stores collision entities for maps from server-side.

@@ -3,7 +3,7 @@
 import { Socket } from 'socket.io-client';
 import { ref, watch } from 'vue';
 
-import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics } from '@/game/renderer';
+import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint } from '@/game/renderer';
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
@@ -12,7 +12,8 @@ import { checkConnection, createNamespacedSocket, serverFetch } from '@/server';
 
 import GameMap from './map';
 import Entity from './entities/entity';
-import Player, { ControlledPlayer, type PlayerTickData } from './entities/player';
+import Player, { ControlledPlayer, type PlayerTickData, type Point } from './entities/player';
+import Projectile, { type ProjectileTickData, type ProjectileType } from './entities/projectile';
 
 const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
@@ -36,13 +37,15 @@ export class GameInstance {
     readonly id: string;
     readonly socket: Socket;
     readonly loadPromise: Promise<void>;
-    readonly camera: RenderEngineViewport = {
+    readonly camera: { mx: number, my: number } & RenderEngineViewport = {
         x: 0,
         y: 0,
         angle: 0,
         width: window.innerWidth * window.devicePixelRatio,
         height: window.innerHeight * window.devicePixelRatio,
-        scale: 64
+        scale: 64,
+        mx: 0,
+        my: 0
     };
     private assetsLoaded: boolean = false;
     drawPerfMetrics: boolean = false;
@@ -54,6 +57,7 @@ export class GameInstance {
     constructor(id: string, authCode: string) {
         // weird singleton implementation
         if (gameInstance.value !== undefined) throw new Error('Game Instance already exists!');
+        (window as any).gameInstance = this;
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
         startTransitionTo('game');
@@ -89,13 +93,28 @@ export class GameInstance {
         });
         // socket stuff
         this.socket.on('tick', (tick) => this.onTick(tick));
-        this.socket.on('initPlayerPhysics', (init: { tick: number, physicsBuffer: number, physicsResolution: number, playerProperties: ControlledPlayer['properties'] }) => {
+        this.socket.on('initPlayerPhysics', (init: {
+            tick: number,
+            physicsBuffer: number,
+            physicsResolution: number,
+            playerProperties: ControlledPlayer['properties'],
+            projectileTypes: { [key in keyof typeof Projectile.types]: Point[] }
+        }) => {
             ControlledPlayer.physicsTick = init.tick;
             ControlledPlayer.physicsResolution = init.physicsResolution;
             ControlledPlayer.physicsBuffer = init.physicsBuffer;
             ControlledPlayer.baseProperties = init.playerProperties;
+            Object.entries(init.projectileTypes).forEach(([type, points]: [any, Point[]]) => {
+                const typeData = ((Projectile.types as any)[type] as ProjectileType);
+                typeData.vertices.length = 0;
+                typeData.vertices.push(...points.map<LinearPoint>((p) => ({ type: 'line', x: p.x, y: p.y })));
+            });
+            this.socket.emit('ready');
         });
         gameInstance.value = this;
+        Entity.serverTps = 1;
+        Entity.tick = 0;
+        ControlledPlayer.physicsTick = 0;
         // connect once loading finishes
         this.loadPromise.then(() => this.socket.connect());
     }
@@ -115,14 +134,18 @@ export class GameInstance {
     private onTick(tick: {
         tick: number
         tps: number
+        avgtps: number
         map: string
         players: PlayerTickData[]
+        projectiles: ProjectileTickData[]
     }) {
         Entity.tick = tick.tick;
         Entity.serverTps = tick.tps;
+        Entity.avgServerTps = tick.avgtps;
         GameMap.current = GameMap.maps.get(tick.map);
         Entity.onTick([]);
         Player.onTick(tick.players);
+        Projectile.onTick(tick.projectiles);
     }
 
     private addInputs() {
@@ -156,20 +179,48 @@ export class GameInstance {
             }
 
         };
+        const onMouseMove = (e: MouseEvent) => {
+            if (ControlledPlayer.self === undefined) return;
+            this.camera.mx = e.clientX - window.innerWidth / 2;
+            this.camera.my = -e.clientY + window.innerHeight / 2;
+            ControlledPlayer.self.inputs.mouseAngle = Math.atan2(this.camera.my, this.camera.mx);
+        };
+        const onMouseDown = (e: MouseEvent) => {
+            if (ControlledPlayer.self === undefined) return;
+            switch (e.button) {
+                case keybinds.primary: ControlledPlayer.self.inputs.primary = true; break;
+                case keybinds.secondary: ControlledPlayer.self.inputs.secondary = true; break;
+            }
+        };
+        const onMouseUp = (e: MouseEvent) => {
+            if (ControlledPlayer.self === undefined) return;
+            switch (e.button) {
+                case keybinds.primary: ControlledPlayer.self.inputs.primary = false; break;
+                case keybinds.secondary: ControlledPlayer.self.inputs.secondary = false; break;
+            }
+        };
         const onBlur = () => {
             if (ControlledPlayer.self === undefined) return;
             ControlledPlayer.self.inputs.left = false;
             ControlledPlayer.self.inputs.right = false;
             ControlledPlayer.self.inputs.up = false;
             ControlledPlayer.self.inputs.down = false;
+            ControlledPlayer.self.inputs.primary = false;
+            ControlledPlayer.self.inputs.secondary = false;
         };
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mouseup', onMouseUp);
         document.addEventListener('blur', onBlur);
         watch(gameInstance, () => {
             if (gameInstance.value?.instanceId !== this.instanceId) {
                 document.removeEventListener('keydown', onKeyDown);
                 document.removeEventListener('keyup', onKeyUp);
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mousedown', onMouseDown);
+                document.removeEventListener('mouseup', onMouseUp);
                 document.removeEventListener('blur', onBlur);
             }
         });
@@ -259,40 +310,49 @@ export class GameInstance {
         const t = performance.now();
         if (ControlledPlayer.self !== undefined) {
             ControlledPlayer.self.lerp(t);
-            this.camera.x = -ControlledPlayer.self.x;
-            this.camera.y = -ControlledPlayer.self.y;
+            this.camera.x = -ControlledPlayer.self.x - this.camera.mx / this.camera.scale * 0.1;
+            this.camera.y = -ControlledPlayer.self.y - this.camera.my / this.camera.scale * 0.1;
             this.camera.angle = -ControlledPlayer.self.angle;
         }
         this.renderEngine.sendFrame(this.camera, [
             // map below
-            [new TexturedRenderable({
-                x: (GameMap.current?.width ?? 0) * 0.5,
-                y: (GameMap.current?.height ?? 0) * 0.5,
-                width: GameMap.current?.width ?? 0,
-                height: GameMap.current?.height ?? 0,
-                cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
-                cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
-                texture: GameMap.current?.index ?? 0
-            })],
+            [
+                new TexturedRenderable({
+                    x: (GameMap.current?.width ?? 0) * 0.5,
+                    y: (GameMap.current?.height ?? 0) * 0.5,
+                    width: GameMap.current?.width ?? 0,
+                    height: GameMap.current?.height ?? 0,
+                    cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
+                    cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
+                    texture: GameMap.current?.index ?? 0
+                })
+            ],
             // misc entities 
             [],
             // players/bullets
-            [...Array.from(Player.list.values())].map((e) => { e.lerp(t); return e; }),
+            [
+                ...Player.list.values(),
+                ...Projectile.list.values(),
+            ].map((e) => { e.lerp(t); return e; }),
             // particles
             // [],
             // map above, debug
-            [new TexturedRenderable({
-                x: (GameMap.current?.width ?? 0) * 0.5,
-                y: (GameMap.current?.height ?? 0) * 0.5,
-                width: GameMap.current?.width ?? 0,
-                height: GameMap.current?.height ?? 0,
-                cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
-                cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
-                texture: GameMap.current?.index ?? 0
-            }), ...(this.overlayRenderer.playerInfo ? (GameMap.current?.flatCollisionGrid ?? []) : [])],
+            [
+                new TexturedRenderable({
+                    x: (GameMap.current?.width ?? 0) * 0.5,
+                    y: (GameMap.current?.height ?? 0) * 0.5,
+                    width: GameMap.current?.width ?? 0,
+                    height: GameMap.current?.height ?? 0,
+                    cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
+                    cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
+                    texture: GameMap.current?.index ?? 0
+                }),
+                ...(this.overlayRenderer.playerInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
+                ...(this.overlayRenderer.playerInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
+            ],
             // ui
             [this.overlayRenderer]
-        ])
+        ]);
     }
 
     /**
@@ -306,6 +366,7 @@ export class GameInstance {
         Entity.serverTps = 1;
         Entity.tick = 0;
         ControlledPlayer.physicsTick = 0;
+        ControlledPlayer.self?.remove();
         Player.list.clear();
     }
 }
@@ -340,11 +401,11 @@ class UIOverlayRenderer extends CustomRenderable {
                 `FPS: ${this.metrics.fps} (${Math.round(this.metrics.fpsHistory.avg)} avg; ${this.metrics.fpsHistory.min} min; ${this.metrics.fpsHistory.max} max)`,
                 ...(this.detailed ? [
                     'Timings:',
-                    `  Total: ${Math.round(this.metrics.timings.total.avg)}ms avg; ${Math.round(this.metrics.timings.total.min)}ms min; ${Math.round(this.metrics.timings.total.max)}ms max`,
-                    `  Sort: ${Math.round(this.metrics.timings.sort.avg)}ms avg; ${Math.round(this.metrics.timings.sort.min)}ms min; ${Math.round(this.metrics.timings.sort.max)}ms max`,
-                    `  Draw: ${Math.round(this.metrics.timings.draw.avg)}ms avg; ${Math.round(this.metrics.timings.draw.min)}ms min; ${Math.round(this.metrics.timings.draw.max)}ms max`,
+                    `  Total: ${this.metrics.timings.total.avg.toFixed(1)}ms avg; ${this.metrics.timings.total.min.toFixed(1)}ms min; ${this.metrics.timings.total.max.toFixed(1)}ms max`,
+                    `  Sort: ${this.metrics.timings.sort.avg.toFixed(1)}ms avg; ${this.metrics.timings.sort.min.toFixed(1)}ms min; ${this.metrics.timings.sort.max.toFixed(1)}ms max`,
+                    `  Draw: ${this.metrics.timings.draw.avg.toFixed(1)}ms avg; ${this.metrics.timings.draw.min.toFixed(1)}ms min; ${this.metrics.timings.draw.max.toFixed(1)}ms max`,
                     'Server:',
-                    `  TPS: ${Entity.serverTps}`,
+                    `  TPS: ${Entity.serverTps}/${Entity.avgServerTps.toFixed(1)}`,
                     `  Tick: ${Entity.tick}/${ControlledPlayer.physicsTick}`,
                     `  Ping: ${this.ping.toPrecision(3)}ms`
                 ] : [])
@@ -385,18 +446,15 @@ export const keybinds = {
     up: 'w',
     down: 's',
     left: 'a',
-    right: 'd'
+    right: 'd',
+    primary: 0,
+    secondary: 2
 };
 
 export default gameInstance;
 
-// if (import.meta.env.DEV) {
-//     console.info('Development mode enabled, exposing game instances');
-//     const existing = (window as any).gameInstance;
-//     if (existing != undefined) gameInstance.value = existing;
-//     watch(gameInstance, () => {
-//         (window as any).gameInstance = gameInstance.value;
-//         console.log((window as any).gameInstance)
-//     });
-//     (window as any).gameInstance = gameInstance.value;
-// }
+if (import.meta.env.DEV) {
+    console.info('Development mode enabled, exposing game instances');
+    const existing = (window as any).gameInstance;
+    if (existing != undefined) gameInstance.value = existing;
+}
