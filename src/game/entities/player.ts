@@ -184,10 +184,10 @@ export class ControlledPlayer extends Player {
         this.gridy = Math.floor(this.y);
         this.contactEdgeLineOffset = this.components.length;
         this.components.push(
-            new PathRenderable({ points: [new LinearPoint(-this.width / 2, -this.height / 2), new LinearPoint(-this.width / 2, this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
-            new PathRenderable({ points: [new LinearPoint(this.width / 2, -this.height / 2), new LinearPoint(this.width / 2, this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
-            new PathRenderable({ points: [new LinearPoint(-this.width / 2, -this.height / 2), new LinearPoint(this.width / 2, -this.height / 2)], color: '#rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
-            new PathRenderable({ points: [new LinearPoint(-this.width / 2, this.height / 2), new LinearPoint(this.width / 2, this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
+            new PathRenderable({ points: [new LinearPoint(-this.width / 2, this.height / 2), new LinearPoint(-this.width / 2, -this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
+            new PathRenderable({ points: [new LinearPoint(this.width / 2, this.height / 2), new LinearPoint(this.width / 2, -this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
+            new PathRenderable({ points: [new LinearPoint(-this.width / 2, this.height / 2), new LinearPoint(this.width / 2, this.height / 2)], color: '#rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
+            new PathRenderable({ points: [new LinearPoint(-this.width / 2, -this.height / 2), new LinearPoint(this.width / 2, -this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
         );
         ControlledPlayer.self = this;
     }

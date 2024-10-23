@@ -658,7 +658,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         return {
             ...entity,
             x: parent.x + entity.x * cosVal - entity.y * sinVal,
-            y: parent.y + entity.y * cosVal - entity.x * sinVal,
+            y: parent.y + entity.y * cosVal + entity.x * sinVal,
             angle: (parent.angle) + (entity.angle)
         };
     }
@@ -794,7 +794,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                 points: entity.points.map((point) => ({
                                     ...point,
                                     x: compositeEntity.x + point.x * cosVal - point.y * sinVal,
-                                    y: compositeEntity.y + point.y * cosVal - point.x * sinVal
+                                    y: compositeEntity.y + point.y * cosVal + point.x * sinVal
                                 })) as PathRenderable['points']
                             }
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [], [transformed]]);
