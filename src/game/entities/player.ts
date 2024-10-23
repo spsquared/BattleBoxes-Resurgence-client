@@ -48,8 +48,8 @@ export class Player extends Entity {
     }
 
     updateHpBar(): void {
-        this.healthBarRenderable.width = this.hp / this.maxHp;
-        this.healthBarRenderable.x = -0.5 + this.healthBarRenderable.width / 2;
+        this.healthBarRenderable.width = this.hp / this.maxHp * 1.2;
+        this.healthBarRenderable.x = -0.6 + this.healthBarRenderable.width / 2;
         this.healthBarRenderable.color = `hsl(${(this.hp - 1) / (this.maxHp - 1) * 120}deg, 100%, 50%)`;
     }
 
@@ -98,10 +98,12 @@ export class ControlledPlayer extends Player {
     gridy: number;
     cosVal: number = NaN;
     sinVal: number = NaN;
-    boundingWidth: number = NaN;
-    boundingHeight: number = NaN;
-    halfBoundingWidth: number = NaN;
-    halfBoundingHeight: number = NaN;
+    readonly boundingBox: Collidable['boundingBox'] = {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0
+    };
     /**List of vertices going clockwise that make up a convex polygon to define the collision shape of the entity */
     readonly vertices: Point[] = [];
 
@@ -155,6 +157,7 @@ export class ControlledPlayer extends Player {
             fly: ControlledPlayer.baseProperties.fly
         };
     modifiers: { id: number, modifier: Modifiers, length: number }[] = [];
+    private lastPhysicsTick: number = 0;
 
     readonly inputs: {
         left: boolean
@@ -189,11 +192,8 @@ export class ControlledPlayer extends Player {
         ControlledPlayer.self = this;
     }
 
-    lerp(time: number): void {
-        // const t = (time - this.lastPhysicsTick) * Entity.serverTps / 1000;
-        // this.x = this.tx + this.vx * t;
-        // this.y = this.ty + this.vy * t;
-        // this.angle = this.ta + this.va * t;
+    lerp(_time: number): void {
+        // this.angle = Math.PI / 3;
     }
 
     tick(packet: PlayerTickData): void {
@@ -219,13 +219,13 @@ export class ControlledPlayer extends Player {
         this.x = this.tx;
         this.y = this.ty;
         this.angle = this.ta;
+        this.calculateCollisionInfo();
         // flying moment
         if (this.properties.fly) {
             // flying just moves
             this.vx = ((this.inputs.right ? 1 : 0) - (this.inputs.left ? 1 : 0)) * this.properties.movePower;
             this.vy = ((this.inputs.up ? 1 : 0) - (this.inputs.down ? 1 : 0)) * this.properties.movePower;
         } else {
-
             // tick simulation - should be identical to server (but server can override anyway)
             // update modifiers
             // modifiers always count down
@@ -245,14 +245,26 @@ export class ControlledPlayer extends Player {
                 if (this.vy < 0) this.vy *= Math.pow(this.properties.wallDrag, friction);
                 if (this.inputs.up || (this.inputs.down && this.contactEdges.bottom == 0)) {
                     const jumpPower = this.properties.jumpPower * this.properties.grip * friction;
-                    this.vx -= moveInput * jumpPower * this.properties.wallJumpPower;
-                    if (this.inputs.up) this.vy += jumpPower;
+                    const movePower = moveInput * jumpPower * this.properties.wallJumpPower;
+                    this.vx -= movePower * this.cosVal;
+                    this.vy += movePower * this.sinVal;
+                    if (this.inputs.up) {
+                        this.vy += jumpPower * this.cosVal;
+                        this.vx -= jumpPower * this.sinVal;
+                    }
                 }
             } else if (this.contactEdges.bottom != 0) {
-                this.vx += moveInput * this.properties.movePower * this.properties.grip * this.contactEdges.bottom;
-                if (this.inputs.up) this.vy += this.properties.jumpPower;
+                const movePower = moveInput * this.properties.movePower * this.properties.grip * this.contactEdges.bottom
+                this.vx += movePower * this.cosVal;
+                this.vy += movePower * this.sinVal;
+                if (this.inputs.up) {
+                    this.vy += this.properties.jumpPower * this.cosVal;
+                    this.vx -= this.properties.jumpPower * this.sinVal;
+                }
             } else {
-                this.vx += moveInput * this.properties.airMovePower;
+                const movePower = moveInput * this.properties.airMovePower;
+                this.vx += movePower * this.cosVal;
+                this.vy += movePower * this.sinVal;
             }
             // apply gravity
             this.vy -= this.properties.gravity * Math.cos(this.angle);
@@ -264,7 +276,7 @@ export class ControlledPlayer extends Player {
         this.ty = this.y;
         this.ta = this.angle;
         // update debug
-        const showContactEdgeDebug = gameInstance.value?.overlayRenderer.playerInfo ? 255 : 0;
+        const showContactEdgeDebug = gameInstance.value?.overlayRenderer.debugInfo ? 255 : 0;
         (this.components[this.contactEdgeLineOffset + 0] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.left})`;
         (this.components[this.contactEdgeLineOffset + 1] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.right})`;
         (this.components[this.contactEdgeLineOffset + 2] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.top})`;
@@ -279,6 +291,7 @@ export class ControlledPlayer extends Player {
                 endy: this.y
             }
         } satisfies ControlledPlayerTickInput);
+        this.lastPhysicsTick = performance.now();
     }
 
     /**
@@ -313,16 +326,17 @@ export class ControlledPlayer extends Player {
                         pos.dx = this.vx = 0;
                         pos.dy = this.vy = 0;
                         this.contactEdges.left = this.contactEdges.right = this.contactEdges.top = this.contactEdges.bottom = col3.friction;
+                        break;
                     } else {
-                        const dir = pos.x - col2.x < 0
-                        pos.x = pos.lx = col2.x + (dir ? -1 : 1) * (col2.halfBoundingWidth + this.halfBoundingWidth + ControlledPlayer.physicsBuffer);
+                        const dir = pos.x < col2.x;
+                        pos.x = pos.lx = dir ? (col2.boundingBox.left - this.boundingBox.right - ControlledPlayer.physicsBuffer) : (col2.boundingBox.right - this.boundingBox.left + ControlledPlayer.physicsBuffer);
                         pos.dx = this.vx = 0;
                         if (dir) this.contactEdges.right = col2.friction;
                         else this.contactEdges.left = col2.friction;
                     }
                 } else {
-                    const dir = pos.y - col1.y < 0;
-                    pos.y = pos.ly = col1.y + (dir ? -1 : 1) * (col1.halfBoundingHeight + this.halfBoundingHeight + ControlledPlayer.physicsBuffer);
+                    const dir = pos.y < col1.y;
+                    pos.y = pos.ly = dir ? (col1.boundingBox.bottom - this.boundingBox.top - ControlledPlayer.physicsBuffer) : (col1.boundingBox.top - this.boundingBox.bottom + ControlledPlayer.physicsBuffer);
                     pos.dy = this.vy = 0;
                     if (dir) this.contactEdges.top = col1.friction;
                     else this.contactEdges.bottom = col1.friction;
@@ -333,6 +347,11 @@ export class ControlledPlayer extends Player {
         this.y = pos.y;
         this.angle += this.va;
         this.calculateCollisionInfo();
+        // const offset = 2 * ControlledPlayer.physicsBuffer;
+        // this.contactEdges.top = this.contactEdges.top || (this.collidesWithMap(this.x, this.y + offset)?.friction ?? this.contactEdges.top);
+        // this.contactEdges.bottom = this.contactEdges.bottom || (this.collidesWithMap(this.x, this.y - offset)?.friction ?? this.contactEdges.bottom);
+        // this.contactEdges.left = this.contactEdges.left || (this.collidesWithMap(this.x - offset, this.y)?.friction ?? this.contactEdges.left);
+        // this.contactEdges.right = this.contactEdges.right || (this.collidesWithMap(this.x + offset, this.y)?.friction ?? this.contactEdges.right);
     }
 
     /**
@@ -344,17 +363,21 @@ export class ControlledPlayer extends Player {
      */
     collidesWithMap(x: number, y: number): MapCollision | null {
         if (GameMap.current === undefined) return null;
-        const sx = Math.max(Math.floor(x - this.halfBoundingWidth), 0);
-        const ex = Math.min(Math.ceil(x + this.halfBoundingWidth), GameMap.current.width - 1);
-        const sy = Math.max(Math.floor(y - this.halfBoundingHeight), 0);
-        const ey = Math.min(Math.ceil(y + this.halfBoundingHeight), GameMap.current.height - 1);
+        const sx = Math.max(Math.floor(x + this.boundingBox.left), 0);
+        const ex = Math.min(Math.ceil(x + this.boundingBox.right), GameMap.current.width - 1);
+        const sy = Math.max(Math.floor(y + this.boundingBox.bottom), 0);
+        const ey = Math.min(Math.ceil(y + this.boundingBox.top), GameMap.current.height - 1);
         const dx = x - this.x;
         const dy = y - this.y;
         const vertices = this.vertices.map((p) => ({ x: p.x + dx, y: p.y + dy }));
         for (let cy = sy; cy <= ey; cy++) {
             for (let cx = sx; cx <= ex; cx++) {
                 for (const col of GameMap.current.collisionGrid[cy][cx]) {
-                    if (Math.abs(x - col.x) > this.halfBoundingWidth + col.halfBoundingWidth || Math.abs(y - col.y) > this.halfBoundingHeight + col.halfBoundingHeight) {
+                    if (x + this.boundingBox.left > col.boundingBox.right
+                        || x + this.boundingBox.right < col.boundingBox.left
+                        || y + this.boundingBox.top < col.boundingBox.bottom
+                        || y + this.boundingBox.bottom > col.boundingBox.top
+                    ) {
                         continue;
                     }
                     for (const p of vertices) {
@@ -399,10 +422,10 @@ export class ControlledPlayer extends Player {
         this.gridy = Math.floor(this.y);
         this.cosVal = Math.cos(this.angle);
         this.sinVal = Math.sin(this.angle);
-        this.boundingWidth = Math.abs(this.width * this.cosVal) + Math.abs(this.height * this.sinVal);
-        this.boundingHeight = Math.abs(this.height * this.cosVal) + Math.abs(this.width * this.sinVal);
-        this.halfBoundingWidth = this.boundingWidth / 2;
-        this.halfBoundingHeight = this.boundingHeight / 2;
+        this.boundingBox.right = (Math.abs(this.width * this.cosVal) + Math.abs(this.height * this.sinVal)) / 2;
+        this.boundingBox.left = -this.boundingBox.right;
+        this.boundingBox.top = (Math.abs(this.height * this.cosVal) + Math.abs(this.width * this.sinVal)) / 2;
+        this.boundingBox.bottom = -this.boundingBox.top;
         const hWidth = this.width / 2;
         const hHeight = this.height / 2;
         this.vertices[0] = { x: this.x - this.cosVal * hWidth + this.sinVal * hHeight, y: this.y + this.cosVal * hWidth + this.sinVal * hHeight };
@@ -464,15 +487,26 @@ export interface Point {
 export class Collidable extends PathRenderable {
     x: number;
     y: number;
-    halfBoundingWidth: number;
-    halfBoundingHeight: number;
+    /**Relative coordinates of axis-aligned rectangular bounding box - left/right are X, top/bottom are Y */
+    readonly boundingBox: {
+        left: number
+        right: number
+        top: number
+        bottom: number
+    }
 
-    constructor(x: number, y: number, hw: number, hh: number, points: PathRenderable['points'], dispColor: string) {
+    constructor(x: number, y: number, points: PathRenderable['points'], dispColor: string) {
         super({ points: points, color: dispColor, lineWidth: 0.04, close: true });
         this.x = x;
         this.y = y;
-        this.halfBoundingWidth = hw;
-        this.halfBoundingHeight = hh;
+        const xcoords = points.map((p) => p.x);
+        const ycoords = points.map((p) => p.y);
+        this.boundingBox = {
+            left: Math.min(...xcoords),
+            right: Math.max(...xcoords),
+            top: Math.max(...ycoords),
+            bottom: Math.min(...ycoords)
+        };
     }
 }
 

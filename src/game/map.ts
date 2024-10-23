@@ -145,8 +145,10 @@ export class GameTileset {
 
 export class MapCollision extends Collidable {
     readonly friction: number;
+    /**Absolute coordinates of axis-aligned rectangular bounding box - left/right are X, top/bottom are Y */
+    declare readonly boundingBox: Collidable['boundingBox'];
     constructor(x: number, y: number, hw: number, hh: number, fr: number) {
-        super(x, y, hw, hh, [
+        super(x, y, [
             { type: 'line', x: x - hw, y: y + hh },
             { type: 'line', x: x + hw, y: y + hh },
             { type: 'line', x: x + hw, y: y - hh },

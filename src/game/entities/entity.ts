@@ -38,9 +38,9 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
      */
     lerp(time: number): void {
         const t = (time - Entity.lastTick) * Entity.serverTps / 1000;
-        this.ix = 0.7 * this.ix + 0.3 * this.tx;
-        this.iy = 0.7 * this.iy + 0.3 * this.ty;
-        this.ia = 0.7 * this.ia + 0.3 * this.ta;
+        this.ix = 0.5 * this.ix + 0.5 * this.tx;
+        this.iy = 0.5 * this.iy + 0.5 * this.ty;
+        this.ia = 0.5 * this.ia + 0.5 * this.ta;
         this.x = this.ix + this.vx * t;
         this.y = this.iy + this.vy * t;
         this.angle = this.ia + this.va * t;

@@ -3,7 +3,7 @@ import { AnimatedTexturedRenderable, CompositeRenderable, type CustomRenderable,
 import Entity from './entity';
 
 import type { EntityTickData } from './entity';
-import { Player, type Point } from './player';
+import { Collidable, Player, type Point } from './player';
 
 /**
  * Provides debug visuals for projectiles. (but also hitboxes look cool)
@@ -23,12 +23,12 @@ export class ProjectileCollisionDebugView extends CompositeRenderable<CustomRend
         }));
     }
 
-    set halfBoundingWidth(w: number) {
-        (this.components[0] as RectangleRenderable).width = 2 * w;
-    }
-
-    set halfBoundingHeight(h: number) {
-        (this.components[0] as RectangleRenderable).height = 2 * h;
+    set boundingBox(rect: Collidable['boundingBox']) {
+        const comp = this.components[0] as RectangleRenderable;
+        comp.x = (rect.right + rect.left) / 2;
+        comp.y = (rect.top + rect.bottom) / 2;
+        comp.width = rect.right - rect.left;
+        comp.height = rect.top - rect.bottom;
     }
 
     /**
@@ -124,8 +124,7 @@ export class Projectile extends Entity {
         super.tick(packet);
         this.collisionDebugView.x = this.tx;
         this.collisionDebugView.y = this.ty;
-        this.collisionDebugView.halfBoundingWidth = packet.halfBoundingWidth;
-        this.collisionDebugView.halfBoundingHeight = packet.halfBoundingHeight;
+        this.collisionDebugView.boundingBox = packet.boundingBox;
         this.collisionDebugView.angle2 = this.ta;
     }
 
@@ -176,8 +175,7 @@ export interface ProjectileType {
 export interface ProjectileTickData extends EntityTickData {
     readonly type: keyof typeof Projectile.types
     readonly parent: string
-    readonly halfBoundingWidth: number
-    readonly halfBoundingHeight: number
+    readonly boundingBox: Collidable['boundingBox']
 }
 
 export default Projectile;

@@ -492,7 +492,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         scale: 1
     };
 
-    private cullDist = 500;
+    private cullDist = 0;
     private fr: number = 60;
     private readonly layers: RenderEngineLayers<LayerDescriptors>;
     private drawing: boolean = true;
@@ -646,11 +646,19 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     private readonly frameCallbacks: Set<() => any> = new Set();
     private readonly nextFramePromises: Set<() => void> = new Set();
 
+    /**
+     * Transforms a renderable entity based on its relative position in parent space to global space.
+     * @param entity Entity to transform
+     * @param parent Parent entity to transform relative to
+     * @param cosVal Cosine of the parent entity's angle
+     * @param sinVal Sine of hte parent entity's angle
+     * @returns Transformed renderable in global space
+     */
     private transformRenderable<Renderable extends CompositeRenderable<CustomRenderable | CustomReadRenderable> | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable<CustomRenderable | CustomReadRenderable>, cosVal: number, sinVal: number): Renderable {
         return {
             ...entity,
             x: parent.x + entity.x * cosVal - entity.y * sinVal,
-            y: parent.y - entity.x * sinVal + entity.y * cosVal,
+            y: parent.y + entity.y * cosVal - entity.x * sinVal,
             angle: (parent.angle) + (entity.angle)
         };
     }
@@ -666,10 +674,17 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         }));
         this.nextFrameCallbacks.clear();
         if (this.frame.length != this.layers.length) return;
-        const cullTop = this.viewport.y - this.viewport.height / 2 / this.viewport.scale - this.cullDist;
-        const cullBottom = this.viewport.y + this.viewport.height / 2 / this.viewport.scale + this.cullDist;
-        const cullLeft = this.viewport.x - this.viewport.width / 2 / this.viewport.scale - this.cullDist;
-        const cullRight = this.viewport.x + this.viewport.width / 2 / this.viewport.scale + this.cullDist;
+        const vpAngleCosVal = Math.cos(this.viewport.angle);
+        const vpAngleSinVal = Math.sin(this.viewport.angle);
+        const vpTransformX = this.viewport.x * vpAngleCosVal - this.viewport.y * vpAngleSinVal;
+        const vpTransformY = this.viewport.y * vpAngleCosVal + this.viewport.x * vpAngleSinVal;
+        const hVpTransformWidth = (Math.abs(this.viewport.width * vpAngleCosVal) + Math.abs(this.viewport.height * vpAngleSinVal)) / 2 / this.viewport.scale;
+        const hVpTransformHeight = (Math.abs(this.viewport.height * vpAngleCosVal) + Math.abs(this.viewport.width * vpAngleSinVal)) / 2 / this.viewport.scale;
+        const cullBottom = vpTransformY - hVpTransformHeight - this.cullDist;
+        const cullTop = vpTransformY + hVpTransformHeight + this.cullDist;
+        const cullLeft = vpTransformX - hVpTransformWidth - this.cullDist;
+        const cullRight = vpTransformX + hVpTransformWidth + this.cullDist;
+        // console.log(vpTransformX, vpTransformY);
         const twoPi = 2 * Math.PI;
         const start = performance.now();
         let sortTotal = 0;
@@ -690,8 +705,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 // center canvas onto viewport (optimization is actually kinda pointless)
-                ctx.translate(this.viewport.x * this.viewport.scale + this.viewport.width / 2, -this.viewport.y * this.viewport.scale + this.viewport.height / 2);
-                if (this.viewport.angle % twoPi != 0) ctx.rotate(-this.viewport.angle);
+                ctx.translate(-this.viewport.x * this.viewport.scale + this.viewport.width / 2, this.viewport.y * this.viewport.scale + this.viewport.height / 2);
+                if (this.viewport.angle % twoPi != 0) ctx.rotate(this.viewport.angle);
                 ctx.scale(this.viewport.scale, this.viewport.scale);
                 ctx.save();
                 // flatten all composite renderables out into categories
@@ -704,19 +719,19 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 const compositeRenderableStack: CompositeRenderable<CustomRenderable | CustomReadRenderable>[] = [];
                 for (const entity of renderables) {
                     if (entity instanceof CompositeRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
                         compositeRenderableStack.push(entity);
                     } else if (entity instanceof TexturedRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
                         if (textures[entity.texture] === undefined) brokenTexturedRenderables.push(entity);
                         else texturedRenderables.push(entity);
                     } else if (entity instanceof RectangleRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
                         const bucket = simpleRenderableBuckets.get(entity.color);
                         if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[entity], [], [], [], []]);
                         else bucket[0].push(entity);
                     } else if (entity instanceof TextRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
                         const bucket = simpleRenderableBuckets.get(entity.color);
                         if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [entity], []]);
                         else bucket[3].push(entity);
@@ -725,7 +740,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [], [entity]]);
                         else bucket[4].push(entity);
                     } else if (entity instanceof CircleRenderable) {
-                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullTop || entity.y > cullBottom)) continue;
+                        if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
                         if (entity.fill != '') {
                             const bucket = simpleRenderableBuckets.get(entity.fill);
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.fill, [[], [entity], [], [], []]);
@@ -753,23 +768,23 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     for (const entity of compositeEntity.components) {
                         if (entity instanceof CompositeRenderable) {
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
                             compositeRenderableStack.push();
                         } else if (entity instanceof TexturedRenderable) {
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
                             if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
                             else texturedRenderables.push(transformed);
                         } else if (entity instanceof RectangleRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[transformed], [], [], [], []]);
                             else bucket[0].push(transformed);
                         } else if (entity instanceof TextRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [transformed], []]);
                             else bucket[3].push(transformed);
                         } else if (entity instanceof PathRenderable) {
@@ -779,7 +794,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                 points: entity.points.map((point) => ({
                                     ...point,
                                     x: compositeEntity.x + point.x * cosVal - point.y * sinVal,
-                                    y: compositeEntity.y - point.x * sinVal - point.y * cosVal
+                                    y: compositeEntity.y + point.y * cosVal - point.x * sinVal
                                 })) as PathRenderable['points']
                             }
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.color, [[], [], [], [], [transformed]]);
@@ -790,7 +805,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                 x: compositeEntity.x + entity.x,
                                 y: compositeEntity.y + entity.y
                             };
-                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullTop || transformed.y > cullBottom)) continue;
+                            if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
                             if (entity.fill != '') {
                                 const bucket = simpleRenderableBuckets.get(entity.fill);
                                 if (bucket === undefined) simpleRenderableBuckets.set(entity.fill, [[], [transformed], [], [], []]);
@@ -836,7 +851,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     } else {
                         ctx.save();
                         ctx.translate(entity.x, -entity.y);
-                        ctx.rotate(-entity.angle!);
+                        ctx.rotate(-entity.angle);
                         if (entity instanceof AnimatedTexturedRenderable) {
                             ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
                         } else {
@@ -868,7 +883,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         } else {
                             ctx.save();
                             ctx.translate(rect.x, -rect.y);
-                            ctx.rotate(-rect.angle!);
+                            ctx.rotate(-rect.angle);
                             drawFn.call(ctx, -rect.width / 2, -rect.height / 2, rect.width, rect.height);
                             ctx.restore();
                         }
@@ -905,7 +920,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         } else {
                             ctx.save();
                             ctx.translate(text.x, -text.y);
-                            ctx.rotate(-text.angle!);
+                            ctx.rotate(-text.angle);
                             ctx.fillText(text.text, 0, 0);
                             ctx.restore();
                         }
@@ -956,7 +971,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     } else {
                         ctx.save();
                         ctx.translate(rect.x, -rect.y);
-                        ctx.rotate(-rect.angle!);
+                        ctx.rotate(-rect.angle);
                         ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width, rect.height);
                         ctx.restore();
                     }
@@ -969,7 +984,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     } else {
                         ctx.save();
                         ctx.translate(rect.x, -rect.y);
-                        ctx.rotate(-rect.angle!);
+                        ctx.rotate(-rect.angle);
                         ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width / 2, rect.height / 2);
                         ctx.fillRect(0, 0, rect.width / 2, rect.height / 2);
                         ctx.restore();

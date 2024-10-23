@@ -48,7 +48,6 @@ export class GameInstance {
         my: 0
     };
     private assetsLoaded: boolean = false;
-    drawPerfMetrics: boolean = false;
 
     /**
      * @param id Game ID (namespace)
@@ -57,7 +56,6 @@ export class GameInstance {
     constructor(id: string, authCode: string) {
         // weird singleton implementation
         if (gameInstance.value !== undefined) throw new Error('Game Instance already exists!');
-        (window as any).gameInstance = this;
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
         startTransitionTo('game');
@@ -112,6 +110,7 @@ export class GameInstance {
             this.socket.emit('ready');
         });
         gameInstance.value = this;
+        if (import.meta.env.DEV) (window as any).gameInstance = this;
         Entity.serverTps = 1;
         Entity.tick = 0;
         ControlledPlayer.physicsTick = 0;
@@ -135,6 +134,8 @@ export class GameInstance {
         tick: number
         tps: number
         avgtps: number
+        heapUsed: number
+        heapTotal: number
         map: string
         players: PlayerTickData[]
         projectiles: ProjectileTickData[]
@@ -146,6 +147,8 @@ export class GameInstance {
         Entity.onTick([]);
         Player.onTick(tick.players);
         Projectile.onTick(tick.projectiles);
+        this.overlayRenderer.serverHeap.used = tick.heapUsed;
+        this.overlayRenderer.serverHeap.total = tick.heapTotal;
     }
 
     private addInputs() {
@@ -163,7 +166,7 @@ export class GameInstance {
                 case keybinds.left: ControlledPlayer.self.inputs.left = true; break;
                 case keybinds.right: ControlledPlayer.self.inputs.right = true; break;
                 case '\\':
-                    if (e.ctrlKey) this.overlayRenderer.playerInfo = !this.overlayRenderer.playerInfo;
+                    if (e.ctrlKey) this.overlayRenderer.debugInfo = !this.overlayRenderer.debugInfo;
                     else this.overlayRenderer.detailed = !this.overlayRenderer.detailed;
                     break;
             }
@@ -183,10 +186,11 @@ export class GameInstance {
             if (ControlledPlayer.self === undefined) return;
             this.camera.mx = e.clientX - window.innerWidth / 2;
             this.camera.my = -e.clientY + window.innerHeight / 2;
-            ControlledPlayer.self.inputs.mouseAngle = Math.atan2(this.camera.my, this.camera.mx);
+            ControlledPlayer.self.inputs.mouseAngle = Math.atan2(this.camera.my, this.camera.mx) + ControlledPlayer.self.angle;
         };
         const onMouseDown = (e: MouseEvent) => {
             if (ControlledPlayer.self === undefined) return;
+            onMouseMove(e);
             switch (e.button) {
                 case keybinds.primary: ControlledPlayer.self.inputs.primary = true; break;
                 case keybinds.secondary: ControlledPlayer.self.inputs.secondary = true; break;
@@ -194,6 +198,7 @@ export class GameInstance {
         };
         const onMouseUp = (e: MouseEvent) => {
             if (ControlledPlayer.self === undefined) return;
+            onMouseMove(e);
             switch (e.button) {
                 case keybinds.primary: ControlledPlayer.self.inputs.primary = false; break;
                 case keybinds.secondary: ControlledPlayer.self.inputs.secondary = false; break;
@@ -243,7 +248,8 @@ export class GameInstance {
                 canvas: 1,
                 target: 1,
                 textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[0])),
-                smoothing: false
+                smoothing: false,
+                culling: false
             },
             // misc. entities
             {
@@ -273,7 +279,8 @@ export class GameInstance {
                 canvas: 1,
                 target: 0,
                 textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[1])),
-                smoothing: false
+                smoothing: false,
+                culling: false
             },
             // ui (replace with "custom" later)
             {
@@ -310,9 +317,12 @@ export class GameInstance {
         const t = performance.now();
         if (ControlledPlayer.self !== undefined) {
             ControlledPlayer.self.lerp(t);
-            this.camera.x = -ControlledPlayer.self.x - this.camera.mx / this.camera.scale * 0.1;
-            this.camera.y = -ControlledPlayer.self.y - this.camera.my / this.camera.scale * 0.1;
-            this.camera.angle = -ControlledPlayer.self.angle;
+            const cosVal = Math.cos(ControlledPlayer.self.angle);
+            const sinVal = Math.sin(ControlledPlayer.self.angle);
+            this.camera.x = (ControlledPlayer.self.x * cosVal + ControlledPlayer.self.y * sinVal) + this.camera.mx / this.camera.scale * 0.1;
+            this.camera.y = (ControlledPlayer.self.y * cosVal - ControlledPlayer.self.x * sinVal) + this.camera.my / this.camera.scale * 0.1;
+            this.camera.angle = ControlledPlayer.self.angle;
+            // this.camera.angle += 0.02;
         }
         this.renderEngine.sendFrame(this.camera, [
             // map below
@@ -325,7 +335,7 @@ export class GameInstance {
                     cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
                     cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
                     texture: GameMap.current?.index ?? 0
-                })
+                }),
             ],
             // misc entities 
             [],
@@ -347,8 +357,8 @@ export class GameInstance {
                     cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
                     texture: GameMap.current?.index ?? 0
                 }),
-                ...(this.overlayRenderer.playerInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
-                ...(this.overlayRenderer.playerInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
+                ...(this.overlayRenderer.debugInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
+                ...(this.overlayRenderer.debugInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
             ],
             // ui
             [this.overlayRenderer]
@@ -362,7 +372,8 @@ export class GameInstance {
         this.renderEngine?.stop();
         this.socket.disconnect();
         gameInstance.value = undefined;
-        (window as any).gameInstance = undefined;
+        if (import.meta.env.DEV) (window as any).gameInstance = undefined;
+        if ((window as any).gameInstance !== undefined) throw new Error('buh i need to access gameInstance otherwise its not undefined');
         Entity.serverTps = 1;
         Entity.tick = 0;
         ControlledPlayer.physicsTick = 0;
@@ -382,43 +393,37 @@ export const loadTexture = async (src: string): Promise<ImageBitmap> => {
 
 class UIOverlayRenderer extends CustomRenderable {
     metrics?: RenderEngineMetrics;
+    serverHeap: { used: number, total: number } = { used: 0, total: 0 };
     ping: number = 0;
     detailed: boolean = false;
-    playerInfo: boolean = false;
+    debugInfo: boolean = false;
 
     draw(ctx: OffscreenCanvasRenderingContext2D) {
         ctx.font = '14px \'Source Code Pro\'';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.resetTransform();
-        if (this.metrics == undefined) {
-            ctx.fillStyle = '#0005';
-            ctx.fillRect(4, 4, ctx.measureText('No Data').width, 16);
-            ctx.fillStyle = '#fff';
-            ctx.fillText('No Data', 6, 6);
-        } else {
-            const lines = [
-                `FPS: ${this.metrics.fps} (${Math.round(this.metrics.fpsHistory.avg)} avg; ${this.metrics.fpsHistory.min} min; ${this.metrics.fpsHistory.max} max)`,
-                ...(this.detailed ? [
-                    'Timings:',
-                    `  Total: ${this.metrics.timings.total.avg.toFixed(1)}ms avg; ${this.metrics.timings.total.min.toFixed(1)}ms min; ${this.metrics.timings.total.max.toFixed(1)}ms max`,
-                    `  Sort: ${this.metrics.timings.sort.avg.toFixed(1)}ms avg; ${this.metrics.timings.sort.min.toFixed(1)}ms min; ${this.metrics.timings.sort.max.toFixed(1)}ms max`,
-                    `  Draw: ${this.metrics.timings.draw.avg.toFixed(1)}ms avg; ${this.metrics.timings.draw.min.toFixed(1)}ms min; ${this.metrics.timings.draw.max.toFixed(1)}ms max`,
-                    'Server:',
-                    `  TPS: ${Entity.serverTps}/${Entity.avgServerTps.toFixed(1)}`,
-                    `  Tick: ${Entity.tick}/${ControlledPlayer.physicsTick}`,
-                    `  Ping: ${this.ping.toPrecision(3)}ms`
-                ] : [])
-            ];
-            ctx.fillStyle = '#0005';
-            for (let i = 0; i < lines.length; i++) ctx.fillRect(4, i * 16 + 8, ctx.measureText(lines[i]).width + 4, 16);
-            ctx.fillStyle = '#fff';
-            for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], 6, i * 16 + 10);
-        }
-        if (this.detailed) {
-            ctx.fillStyle = '#0005';
-        }
-        if (this.playerInfo) {
+        const lines = [
+            `FPS: ${this.metrics?.fps ?? 'NO DATA'} (${Math.round(this.metrics?.fpsHistory.avg ?? 0)} avg; ${this.metrics?.fpsHistory.min ?? 0} min; ${this.metrics?.fpsHistory.max ?? 0} max)`,
+            ...(this.detailed ? [
+                'Timings:',
+                `  Total: ${this.metrics?.timings.total.avg.toFixed(1)}ms avg; ${this.metrics?.timings.total.min.toFixed(1)}ms min; ${this.metrics?.timings.total.max.toFixed(1)}ms max`,
+                `  Sort: ${this.metrics?.timings.sort.avg.toFixed(1)}ms avg; ${this.metrics?.timings.sort.min.toFixed(1)}ms min; ${this.metrics?.timings.sort.max.toFixed(1)}ms max`,
+                `  Draw: ${this.metrics?.timings.draw.avg.toFixed(1)}ms avg; ${this.metrics?.timings.draw.min.toFixed(1)}ms min; ${this.metrics?.timings.draw.max.toFixed(1)}ms max`,
+                'Server:',
+                `  TPS: ${Entity.serverTps}/${Entity.avgServerTps.toFixed(1)}`,
+                `  Tick: ${ControlledPlayer.physicsTick}/${Entity.tick}`,
+                `  Ping: ${this.ping.toFixed(1)}ms`,
+                'Heap:',
+                `  Server: ${this.serverHeap.used.toFixed(2)}MB/${this.serverHeap.total.toFixed(2)}MB`,
+                `  Client: ${(performance as any).memory === undefined ? 'NO DATA' : `${((performance as any).memory.usedJSHeapSize / 1048576).toFixed(2)}MB/${((performance as any).memory.totalJSHeapSize / 1048576).toFixed(2)}MB`}`
+            ] : [])
+        ];
+        ctx.fillStyle = '#0005';
+        for (let i = 0; i < lines.length; i++) ctx.fillRect(4, i * 16 + 8, ctx.measureText(lines[i]).width + 4, 16);
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], 6, i * 16 + 10);
+        if (this.debugInfo) {
             ctx.translate(ctx.canvas.width, 0);
             ctx.textAlign = 'right';
             if (ControlledPlayer.self === undefined) {
