@@ -219,6 +219,10 @@ export interface TexturedRenderable extends Omit<RectangleRenderable, 'color' | 
     cropx: number;
     /**Height of cropped texture area (texture spans from `shifty` to `shifty + cropy`) */
     cropy: number;
+    /**If not same as width, controls the width of the drawn texture and repeats the texture to fill the object width */
+    tileWidth: number;
+    /**If not same as height, controls the height of the drawn texture and repeats the texture to fill the object height */
+    tileHeight: number;
 }
 
 export class TexturedRenderable {
@@ -233,6 +237,8 @@ export class TexturedRenderable {
         this.shifty = init.shifty ?? 0;
         this.cropx = init.cropx ?? this.width - this.shiftx;
         this.cropy = init.cropy ?? this.height - this.shifty;
+        this.tileWidth = init.tileWidth ?? this.width;
+        this.tileHeight = init.tileHeight ?? this.height;
     }
 }
 
@@ -509,6 +515,10 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             sortTimings: [],
             drawTimings: []
         };
+    // Auxillary canvas used in intermediate drawing for some textures
+    private readonly auxCanvas: OffscreenCanvas;
+    private readonly auxCtx: OffscreenCanvasRenderingContext2D;
+    private readonly missingTexture: Promise<ImageBitmap>;
 
     /**
      * @param {HTMLCanvasElement} baseCanvas Visible canvas to use as canvas `0`
@@ -576,6 +586,20 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 });
             }
         }
+        // create aux canvas
+        this.auxCanvas = new OffscreenCanvas(1, 1);
+        const auxCtx = this.auxCanvas.getContext('2d');
+        if (auxCtx == null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
+        this.auxCtx = auxCtx;
+        this.auxCanvas.width = 2;
+        this.auxCanvas.height = 2;
+        this.auxCtx.reset();
+        this.auxCtx.fillStyle = '#000';
+        this.auxCtx.fillRect(0, 0, 2, 2);
+        this.auxCtx.fillStyle = '#F0F';
+        this.auxCtx.fillRect(0, 0, 1, 1);
+        this.auxCtx.fillRect(1, 1, 1, 1);
+        this.missingTexture = createImageBitmap(this.auxCanvas);
         // start draw loop
         const startDraw = async () => {
             while (this.drawing) {
@@ -618,7 +642,9 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     }
 
     /**
-     * Send a new frame to the `RenderEngine`. This frame data will be held until the next call to `sendFrame`. Calling this does not cause a frame to be drawn.
+     * Send a new frame to the `RenderEngine`. This frame data will be held until the next call to `sendFrame`.
+     * Calling this does not cause a frame to be drawn. It is recommended to **reuse** renderables across frames to
+     * improve performance, especially with lots of tiled textures.
      * @param {RenderEngineFrameInput} entities Entities to draw on each layer, following the `RenderEngineLayerDescriptors` given
      */
     sendFrame(viewport: RenderEngineViewport, entities: RenderEngineFrameInput<LayerDescriptors>) {
@@ -663,6 +689,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         };
     }
 
+    private readonly texturePatternCache: Map<string, CanvasPattern> = new Map();
     private async drawFrame() {
         // before frame callbacks first
         await Promise.all([...Array.from(this.nextFrameCallbacks), ...Array.from(this.frameCallbacks)].map((cb) => {
@@ -674,6 +701,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         }));
         this.nextFrameCallbacks.clear();
         if (this.frame.length != this.layers.length) return;
+        // setup
         const vpAngleCosVal = Math.cos(this.viewport.angle);
         const vpAngleSinVal = Math.sin(this.viewport.angle);
         const vpTransformX = this.viewport.x * vpAngleCosVal - this.viewport.y * vpAngleSinVal;
@@ -684,8 +712,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         const cullTop = vpTransformY + hVpTransformHeight + this.cullDist;
         const cullLeft = vpTransformX - hVpTransformWidth - this.cullDist;
         const cullRight = vpTransformX + hVpTransformWidth + this.cullDist;
-        // console.log(vpTransformX, vpTransformY);
         const twoPi = 2 * Math.PI;
+        const unusedTexturePatterns = new Set(this.texturePatternCache.keys());
         const start = performance.now();
         let sortTotal = 0;
         let drawTotal = 0;
@@ -839,23 +867,54 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 // reset again to clear any accidental changes
                 ctx.restore();
                 ctx.save();
-                // draw textured entities
                 const drawStart = performance.now();
+                // draw textured entities
                 for (const entity of texturedRenderables) {
-                    if (entity.angle % twoPi == 0) {
-                        if (entity instanceof AnimatedTexturedRenderable) {
-                            ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
+                    const texture = textures[entity.texture];
+                    const shiftx = (entity instanceof AnimatedTexturedRenderable ? entity.index * entity.frameWidth : 0) + entity.shiftx;
+                    const tiled = entity.tileWidth != entity.width || entity.tileHeight != entity.height;
+                    // generate patterns to tile textures
+                    if (tiled) {
+                        // checks properties and not object (small chance of collision by js wierdness with order of keys)
+                        const patternKey = Object.entries(entity).reduce<string>((prev, curr) => prev + ':' + curr[1], '' + i);
+                        if (this.texturePatternCache.has(patternKey)) {
+                            ctx.fillStyle = this.texturePatternCache.get(patternKey)!;
+                            unusedTexturePatterns.delete(patternKey);
                         } else {
-                            ctx.drawImage(textures[entity.texture], entity.shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
+                            this.auxCanvas.width = entity.tileWidth * this.viewport.scale;
+                            this.auxCanvas.height = entity.tileHeight * this.viewport.scale;
+                            this.auxCtx.reset();
+                            this.auxCtx.imageSmoothingEnabled = layer.smoothing;
+                            this.auxCtx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, 0, 0, this.auxCanvas.width, this.auxCanvas.height);
+                            const pattern = ctx.createPattern(this.auxCanvas, '') as CanvasPattern;
+                            this.texturePatternCache.set(patternKey, pattern);
+                            ctx.fillStyle = pattern;
+                        }
+                    }
+                    if (entity.angle % twoPi == 0) {
+                        if (tiled) {
+                            // transform added to align pattern with rectangle
+                            ctx.save();
+                            ctx.translate(entity.x - entity.width / 2, -entity.y - entity.height / 2);
+                            ctx.scale(1 / this.viewport.scale, 1 / this.viewport.scale);
+                            ctx.fillRect(0, 0, entity.width * this.viewport.scale, entity.height * this.viewport.scale);
+                            ctx.restore();
+                        } else {
+                            ctx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
                         }
                     } else {
                         ctx.save();
                         ctx.translate(entity.x, -entity.y);
                         ctx.rotate(-entity.angle);
-                        if (entity instanceof AnimatedTexturedRenderable) {
-                            ctx.drawImage(textures[entity.texture], entity.index * entity.frameWidth + entity.shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
+                        if (tiled) {
+                            // transform added to align pattern with rectangle
+                            ctx.save();
+                            ctx.translate(-entity.width / 2, -entity.height / 2);
+                            ctx.scale(1 / this.viewport.scale, 1 / this.viewport.scale);
+                            ctx.fillRect(0, 0, entity.width * this.viewport.scale, entity.height * this.viewport.scale);
+                            ctx.restore();
                         } else {
-                            ctx.drawImage(textures[entity.texture], entity.shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
+                            ctx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
                         }
                         ctx.restore();
                     }
@@ -963,31 +1022,39 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     ctx.stroke();
                 }
                 // draw all textured entities with invalid textures
-                if (brokenTexturedRenderables.length > 0) console.warn(brokenTexturedRenderables.length + ' TexturedRenderables referencing nonexistant textures found!');
-                ctx.fillStyle = '#000';
-                for (const rect of brokenTexturedRenderables) {
-                    if (rect.angle % twoPi == 0) {
-                        ctx.fillRect(rect.x - rect.width / 2, -rect.y - rect.height / 2, rect.width, rect.height);
-                    } else {
-                        ctx.save();
-                        ctx.translate(rect.x, -rect.y);
-                        ctx.rotate(-rect.angle);
-                        ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width, rect.height);
-                        ctx.restore();
-                    }
-                }
-                ctx.fillStyle = '#F0F';
-                for (const rect of brokenTexturedRenderables) {
-                    if (rect.angle % twoPi == 0) {
-                        ctx.fillRect(rect.x - rect.width / 2, -rect.y - rect.height / 2, rect.width / 2, rect.height / 2);
-                        ctx.fillRect(rect.x, rect.y, rect.width / 2, rect.height / 2);
-                    } else {
-                        ctx.save();
-                        ctx.translate(rect.x, -rect.y);
-                        ctx.rotate(-rect.angle);
-                        ctx.fillRect(-rect.width / 2, -rect.height / 2, rect.width / 2, rect.height / 2);
-                        ctx.fillRect(0, 0, rect.width / 2, rect.height / 2);
-                        ctx.restore();
+                if (brokenTexturedRenderables.length > 0) {
+                    console.warn(brokenTexturedRenderables.length + ' TexturedRenderables referencing nonexistent textures found!');
+                    for (const entity of brokenTexturedRenderables) {
+                        const tiled = entity.tileWidth != entity.width || entity.tileHeight != entity.height;
+                        if (entity.angle % twoPi == 0) {
+                            if (tiled) {
+                                // transform added to align pattern with rectangle
+                                ctx.save();
+                                ctx.translate(entity.x - entity.width / 2, -entity.y - entity.height / 2);
+                                const pattern = ctx.createPattern(await this.missingTexture, '') as CanvasPattern;
+                                ctx.fillStyle = pattern;
+                                ctx.fillRect(0, 0, entity.width, entity.height);
+                                ctx.restore();
+                            } else {
+                                ctx.drawImage(await this.missingTexture, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
+                            }
+                        } else {
+                            ctx.save();
+                            ctx.translate(entity.x, -entity.y);
+                            ctx.rotate(-entity.angle);
+                            if (tiled) {
+                                // transform added to align pattern with rectangle
+                                ctx.save();
+                                ctx.translate(-entity.width / 2, -entity.height / 2);
+                                const pattern = ctx.createPattern(await this.missingTexture, '') as CanvasPattern;
+                                ctx.fillStyle = pattern;
+                                ctx.fillRect(0, 0, entity.width, entity.height);
+                                ctx.restore();
+                            } else {
+                                ctx.drawImage(await this.missingTexture, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
+                            }
+                            ctx.restore();
+                        }
                     }
                 }
                 drawTotal += performance.now() - drawStart;
@@ -1007,6 +1074,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 targetCanvas.restore();
             }
         }
+        // remove unused texture patterns
+        for (const key of unusedTexturePatterns) this.texturePatternCache.delete(key);
         // record performance metrics
         const now = performance.now();
         this.metricsCounters.frames.push(now);

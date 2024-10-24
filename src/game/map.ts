@@ -102,6 +102,10 @@ export class GameMap {
         for (const [name, json] of mapsJson) new GameMap(json, name.replace('.json', ''));
         await Promise.all(Array.from(this.maps.values(), (map) => map.textures));
     }
+
+    static get tileSize(): number {
+        return GameMap.tileset?.tileSize ?? 0;
+    }
 }
 
 /**

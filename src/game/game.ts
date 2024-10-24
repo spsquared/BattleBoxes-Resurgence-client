@@ -166,7 +166,7 @@ export class GameInstance {
                 case keybinds.left: ControlledPlayer.self.inputs.left = true; break;
                 case keybinds.right: ControlledPlayer.self.inputs.right = true; break;
                 case '\\':
-                    if (e.ctrlKey) this.overlayRenderer.debugInfo = !this.overlayRenderer.debugInfo;
+                    if (e.ctrlKey) this.showDebugInfo = !this.showDebugInfo;
                     else this.overlayRenderer.detailed = !this.overlayRenderer.detailed;
                     break;
             }
@@ -235,7 +235,9 @@ export class GameInstance {
         return this.assetsLoaded;
     }
 
-    readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
+    showDebugInfo: boolean = false;
+    private readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
+    private mapRenderables: TexturedRenderable[] = [];
     /**
      * Creates a new renderer instance.
      */
@@ -322,20 +324,13 @@ export class GameInstance {
             this.camera.x = (ControlledPlayer.self.x * cosVal + ControlledPlayer.self.y * sinVal) + this.camera.mx / this.camera.scale * 0.1;
             this.camera.y = (ControlledPlayer.self.y * cosVal - ControlledPlayer.self.x * sinVal) + this.camera.my / this.camera.scale * 0.1;
             this.camera.angle = ControlledPlayer.self.angle;
-            // this.camera.angle += 0.02;
         }
+        // generate new map stuff if needed
+        if (this.mapRenderables[0]?.texture != GameMap.current?.index) this.mapRenderables = await this.generateMapRenderables();
         this.renderEngine.sendFrame(this.camera, [
             // map below
             [
-                new TexturedRenderable({
-                    x: (GameMap.current?.width ?? 0) * 0.5,
-                    y: (GameMap.current?.height ?? 0) * 0.5,
-                    width: GameMap.current?.width ?? 0,
-                    height: GameMap.current?.height ?? 0,
-                    cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
-                    cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
-                    texture: GameMap.current?.index ?? 0
-                }),
+                ...this.mapRenderables,
             ],
             // misc entities 
             [],
@@ -348,21 +343,134 @@ export class GameInstance {
             // [],
             // map above, debug
             [
-                new TexturedRenderable({
-                    x: (GameMap.current?.width ?? 0) * 0.5,
-                    y: (GameMap.current?.height ?? 0) * 0.5,
-                    width: GameMap.current?.width ?? 0,
-                    height: GameMap.current?.height ?? 0,
-                    cropx: (await GameMap.current?.textures)?.at(0)?.width ?? 0,
-                    cropy: (await GameMap.current?.textures)?.at(0)?.height ?? 0,
-                    texture: GameMap.current?.index ?? 0
-                }),
-                ...(this.overlayRenderer.debugInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
-                ...(this.overlayRenderer.debugInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
+                ...this.mapRenderables,
+                ...(this.showDebugInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
+                ...(this.showDebugInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
             ],
             // ui
             [this.overlayRenderer]
         ]);
+    }
+
+    private readonly mapEdgeBuffer = 16;
+    private async generateMapRenderables(): Promise<TexturedRenderable[]> {
+        const width = GameMap.current?.width ?? 0;
+        const height = GameMap.current?.height ?? 0;
+        const texture = (await GameMap.current?.textures)?.at(0);
+        const textureWidth = texture?.width ?? 0;
+        const textureHeight = texture?.height ?? 0;
+        const textureIndex = GameMap.current?.index ?? 0;
+        return [
+            new TexturedRenderable({
+                x: width / 2,
+                y: height / 2,
+                width: width,
+                height: height,
+                shiftx: 0,
+                shifty: 0,
+                cropx: textureWidth,
+                cropy: textureHeight,
+                texture: textureIndex
+            }),
+            // edges
+            new TexturedRenderable({
+                x: -this.mapEdgeBuffer / 2,
+                y: height / 2,
+                width: this.mapEdgeBuffer,
+                height: height,
+                shiftx: 0,
+                shifty: 0,
+                cropx: GameMap.tileSize,
+                cropy: textureHeight,
+                tileWidth: 1,
+                tileHeight: height
+            }),
+            new TexturedRenderable({
+                x: width + this.mapEdgeBuffer / 2,
+                y: height / 2,
+                width: this.mapEdgeBuffer,
+                height: height,
+                shiftx: textureWidth - GameMap.tileSize,
+                shifty: 0,
+                cropx: GameMap.tileSize,
+                cropy: textureHeight,
+                tileWidth: 1,
+                tileHeight: height
+            }),
+            new TexturedRenderable({
+                x: width / 2,
+                y: height + this.mapEdgeBuffer / 2,
+                width: width,
+                height: this.mapEdgeBuffer,
+                shiftx: 0,
+                shifty: 0,
+                cropx: textureWidth,
+                cropy: GameMap.tileSize,
+                tileWidth: width,
+                tileHeight: 1
+            }),
+            new TexturedRenderable({
+                x: width / 2,
+                y: -this.mapEdgeBuffer / 2,
+                width: width,
+                height: this.mapEdgeBuffer,
+                shiftx: 0,
+                shifty: textureHeight - GameMap.tileSize,
+                cropx: textureWidth,
+                cropy: GameMap.tileSize,
+                tileWidth: width,
+                tileHeight: 1
+            }),
+            // corners (texture space is +y down, but game space is +y up)
+            new TexturedRenderable({
+                x: -this.mapEdgeBuffer / 2,
+                y: -this.mapEdgeBuffer / 2,
+                width: this.mapEdgeBuffer,
+                height: this.mapEdgeBuffer,
+                shiftx: 0,
+                shifty: textureHeight - GameMap.tileSize,
+                cropx: GameMap.tileSize,
+                cropy: GameMap.tileSize,
+                tileWidth: 1,
+                tileHeight: 1
+            }),
+            new TexturedRenderable({
+                x: -this.mapEdgeBuffer / 2,
+                y: height + this.mapEdgeBuffer / 2,
+                width: this.mapEdgeBuffer,
+                height: this.mapEdgeBuffer,
+                shiftx: 0,
+                shifty: 0,
+                cropx: GameMap.tileSize,
+                cropy: GameMap.tileSize,
+                tileWidth: 1,
+                tileHeight: 1
+            }),
+            new TexturedRenderable({
+                x: width + this.mapEdgeBuffer / 2,
+                y: height + this.mapEdgeBuffer / 2,
+                width: this.mapEdgeBuffer,
+                height: this.mapEdgeBuffer,
+                shiftx: textureWidth - GameMap.tileSize,
+                shifty: 0,
+                cropx: GameMap.tileSize,
+                cropy: GameMap.tileSize,
+                tileWidth: 1,
+                tileHeight: 1
+            }),
+            new TexturedRenderable({
+                x: width + this.mapEdgeBuffer / 2,
+                y: -this.mapEdgeBuffer / 2,
+                width: this.mapEdgeBuffer,
+                height: this.mapEdgeBuffer,
+                shiftx: textureWidth - GameMap.tileSize,
+                shifty: textureHeight - GameMap.tileSize,
+                cropx: GameMap.tileSize,
+                cropy: GameMap.tileSize,
+                tileWidth: 1,
+                tileHeight: 1
+            }),
+        ];
     }
 
     /**
@@ -396,7 +504,6 @@ class UIOverlayRenderer extends CustomRenderable {
     serverHeap: { used: number, total: number } = { used: 0, total: 0 };
     ping: number = 0;
     detailed: boolean = false;
-    debugInfo: boolean = false;
 
     draw(ctx: OffscreenCanvasRenderingContext2D) {
         ctx.font = '14px \'Source Code Pro\'';
@@ -416,14 +523,17 @@ class UIOverlayRenderer extends CustomRenderable {
                 `  Ping: ${this.ping.toFixed(1)}ms`,
                 'Heap:',
                 `  Server: ${this.serverHeap.used.toFixed(2)}MB/${this.serverHeap.total.toFixed(2)}MB`,
-                `  Client: ${(performance as any).memory === undefined ? 'NO DATA' : `${((performance as any).memory.usedJSHeapSize / 1048576).toFixed(2)}MB/${((performance as any).memory.totalJSHeapSize / 1048576).toFixed(2)}MB`}`
+                `  Client: ${(performance as any).memory === undefined ? 'NO DATA' : `${((performance as any).memory.usedJSHeapSize / 1048576).toFixed(2)}MB/${((performance as any).memory.totalJSHeapSize / 1048576).toFixed(2)}MB`}`,
+                'Entities:',
+                `  Pl: ${Player.list.size}`,
+                `  Pj: ${Projectile.list.size}`
             ] : [])
         ];
         ctx.fillStyle = '#0005';
         for (let i = 0; i < lines.length; i++) ctx.fillRect(4, i * 16 + 8, ctx.measureText(lines[i]).width + 4, 16);
         ctx.fillStyle = '#fff';
         for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], 6, i * 16 + 10);
-        if (this.debugInfo) {
+        if (gameInstance.value?.showDebugInfo) {
             ctx.translate(ctx.canvas.width, 0);
             ctx.textAlign = 'right';
             if (ControlledPlayer.self === undefined) {

@@ -192,9 +192,7 @@ export class ControlledPlayer extends Player {
         ControlledPlayer.self = this;
     }
 
-    lerp(_time: number): void {
-        // this.angle = Math.PI / 3;
-    }
+    lerp(_time: number): void { }
 
     tick(packet: PlayerTickData): void {
         if (packet.overridePosition) {
@@ -276,7 +274,7 @@ export class ControlledPlayer extends Player {
         this.ty = this.y;
         this.ta = this.angle;
         // update debug
-        const showContactEdgeDebug = gameInstance.value?.overlayRenderer.debugInfo ? 255 : 0;
+        const showContactEdgeDebug = gameInstance.value?.showDebugInfo ? 255 : 0;
         (this.components[this.contactEdgeLineOffset + 0] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.left})`;
         (this.components[this.contactEdgeLineOffset + 1] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.right})`;
         (this.components[this.contactEdgeLineOffset + 2] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.top})`;
