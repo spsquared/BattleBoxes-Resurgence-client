@@ -127,6 +127,7 @@ export class ControlledPlayer extends Player {
         jumpPower: 0,
         wallJumpPower: 0,
         airMovePower: 0,
+        sneakDrag: 0,
         drag: 0,
         airDrag: 0,
         wallDrag: 0,
@@ -139,6 +140,7 @@ export class ControlledPlayer extends Player {
         jumpPower: number
         wallJumpPower: number
         airMovePower: number
+        sneakDrag: number
         drag: number
         airDrag: number
         wallDrag: number
@@ -150,6 +152,7 @@ export class ControlledPlayer extends Player {
             jumpPower: ControlledPlayer.baseProperties.jumpPower,
             wallJumpPower: ControlledPlayer.baseProperties.wallJumpPower,
             airMovePower: ControlledPlayer.baseProperties.airMovePower,
+            sneakDrag: ControlledPlayer.baseProperties.sneakDrag,
             drag: ControlledPlayer.baseProperties.drag,
             airDrag: ControlledPlayer.baseProperties.airDrag,
             wallDrag: ControlledPlayer.baseProperties.wallDrag,
@@ -243,30 +246,18 @@ export class ControlledPlayer extends Player {
                 if (this.vy < 0) this.vy *= Math.pow(this.properties.wallDrag, friction);
                 if (this.inputs.up || (this.inputs.down && this.contactEdges.bottom == 0)) {
                     const jumpPower = this.properties.jumpPower * this.properties.grip * friction;
-                    const movePower = moveInput * jumpPower * this.properties.wallJumpPower;
-                    this.vx -= movePower * this.cosVal;
-                    this.vy += movePower * this.sinVal;
-                    if (this.inputs.up) {
-                        this.vy += jumpPower * this.cosVal;
-                        this.vx -= jumpPower * this.sinVal;
-                    }
+                    this.vx -= moveInput * jumpPower * this.properties.wallJumpPower;
+                    if (this.inputs.up) this.vy += jumpPower;
                 }
             } else if (this.contactEdges.bottom != 0) {
-                const movePower = moveInput * this.properties.movePower * this.properties.grip * this.contactEdges.bottom
-                this.vx += movePower * this.cosVal;
-                this.vy += movePower * this.sinVal;
-                if (this.inputs.up) {
-                    this.vy += this.properties.jumpPower * this.cosVal;
-                    this.vx -= this.properties.jumpPower * this.sinVal;
-                }
+                this.vx += moveInput * this.properties.movePower * this.properties.grip;
+                if (this.inputs.down) this.vx *= this.properties.sneakDrag;
+                if (this.inputs.up) this.vy += this.properties.jumpPower;
             } else {
-                const movePower = moveInput * this.properties.airMovePower;
-                this.vx += movePower * this.cosVal;
-                this.vy += movePower * this.sinVal;
+                this.vx += moveInput * this.properties.airMovePower;
             }
             // apply gravity
-            this.vy -= this.properties.gravity * Math.cos(this.angle);
-            this.vx += this.properties.gravity * Math.sin(this.angle);
+            this.vy -= this.properties.gravity;
         }
         // move to next position
         this.nextPosition();

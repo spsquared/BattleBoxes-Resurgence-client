@@ -27,7 +27,7 @@ function click() {
 
 <template>
     <label :class="'uiIconButtonLabel ' + ($props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title=title>
-        <input :type="$props.type ?? 'button'" class="uiIconButton" @click=click :disabled=$props.disabled>
+        <input :type="$props.type ?? 'button'" class="uiIconButton" @click="click" :disabled=$props.disabled>
         <div :class="$props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
         <span class="uiIconButtonText" v-if="!$props.imgOnly">{{ $props.text }}</span>
     </label>

@@ -1,7 +1,7 @@
 // main engine, contains general game logic
 
 import { Socket } from 'socket.io-client';
-import { ref, watch } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 
 import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint } from '@/game/renderer';
 import '@/game/sound';
@@ -22,6 +22,7 @@ canvasRoot.appendChild(canvas);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 export const gameInstance = ref<GameInstance>();
+export const chatHistory: Ref<{ message: ChatMessageSection[], id: number }[]> = ref([]);
 
 // map below, misc entities, players/bullets, particles, map above, debug, ui
 // add particles "webgl" and replace ui 2d with "custom" later
@@ -37,6 +38,9 @@ export class GameInstance {
     readonly id: string;
     readonly socket: Socket;
     readonly loadPromise: Promise<void>;
+    private leaveReason?: string = undefined;
+
+    readonly maxChatHistory: number = 100;
     readonly camera: { mx: number, my: number } & RenderEngineViewport = {
         x: 0,
         y: 0,
@@ -70,10 +74,13 @@ export class GameInstance {
         });
         this.addInputs();
         // socket connection
+        this.socket.on('leave', (reason?: string) => {
+            this.leaveReason = reason;
+        });
         this.socket.on('disconnect', async (reason) => {
             await modal.showModal({
                 title: 'Disconnected',
-                content: reason ?? 'connection lost',
+                content: this.leaveReason ?? reason ?? 'connection lost',
                 color: 'red'
             }).result;
             startTransitionTo('menu');
@@ -108,6 +115,13 @@ export class GameInstance {
                 typeData.vertices.push(...points.map<LinearPoint>((p) => ({ type: 'line', x: p.x, y: p.y })));
             });
             this.socket.emit('ready');
+        });
+        // chat
+        chatHistory.value.length = 0;
+        let chatCount = 0;
+        this.socket.on('chatMessage', (message: ChatMessageSection[]) => {
+            chatHistory.value.push({ message: message, id: chatCount++ });
+            if (chatHistory.value.length > this.maxChatHistory) chatHistory.value.shift();
         });
         gameInstance.value = this;
         if (import.meta.env.DEV) (window as any).gameInstance = this;
@@ -151,9 +165,11 @@ export class GameInstance {
         this.overlayRenderer.serverHeap.total = tick.heapTotal;
     }
 
+    private readonly externalKeybinds: Map<string, Set<(e: KeyboardEvent) => any>> = new Map();
     private addInputs() {
         const onKeyDown = (e: KeyboardEvent) => {
             if (ControlledPlayer.self === undefined) return;
+            if (this.externalKeybinds.has(e.key)) this.externalKeybinds.get(e.key)!.forEach((cb) => { try { cb(e) } catch (err) { console.error(err); } });
             if (e.target instanceof HTMLElement && e.target.matches('input[type=text], input[type=number], input[type=password], textarea')) {
                 if (e.key == 'Escape') e.target.blur();
                 return;
@@ -229,6 +245,11 @@ export class GameInstance {
                 document.removeEventListener('blur', onBlur);
             }
         });
+    }
+
+    addKeybind(key: string, cb: (e: KeyboardEvent) => any) {
+        if (this.externalKeybinds.has(key)) this.externalKeybinds.get(key)!.add(cb);
+        else this.externalKeybinds.set(key, new Set([cb]));
     }
 
     get loaded() {
@@ -474,6 +495,14 @@ export class GameInstance {
     }
 
     /**
+     * Send a message in public chat.
+     * @param message Message
+     */
+    sendChatMessage(message: string) {
+        this.socket.emit('chatMessage', message);
+    }
+
+    /**
      * Disconnects and closes the game client.
      */
     destroy() {
@@ -488,6 +517,17 @@ export class GameInstance {
         ControlledPlayer.self?.remove();
         Player.list.clear();
     }
+}
+
+/**Describes a single section of a chat message - see server documentation */
+export interface ChatMessageSection {
+    text: string
+    style?: {
+        color?: string,
+        fontWeight?: 'normal' | 'bold',
+        fontStyle?: 'normal' | 'italic'
+    }
+    trusted?: boolean
 }
 
 /**
@@ -571,5 +611,8 @@ export default gameInstance;
 if (import.meta.env.DEV) {
     console.info('Development mode enabled, exposing game instances');
     const existing = (window as any).gameInstance;
-    if (existing != undefined) gameInstance.value = existing;
+    if (existing != undefined) {
+        gameInstance.value = existing;
+        console.warn('Existing game instance found, using that (this may break things!)');
+    }
 }

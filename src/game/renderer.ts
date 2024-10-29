@@ -781,7 +781,11 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         }
                     } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
                         ctx.save();
-                        entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures);
+                        try {
+                            entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures);
+                        } catch (err) {
+                            console.error(err);
+                        }
                         ctx.restore();
                     } else {
                         console.warn(new RenderEngineError('Unrecognizable entity in pipeline, discarding!'));
@@ -856,8 +860,11 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         if (compositeEntity.angle) ctx.rotate(compositeEntity.angle);
                         for (const component of customComponents) {
                             ctx.save();
-                            if (component instanceof CustomReadRenderable) component.draw(ctx as CanvasRenderingContext2D, textures.slice());
-                            else component.draw(ctx as OffscreenCanvasRenderingContext2D, textures.slice());
+                            try {
+                                component.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures.slice());
+                            } catch (err) {
+                                console.error(err);
+                            }
                             ctx.restore();
                         }
                         ctx.restore();

@@ -16,10 +16,14 @@ defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'input', value: string): any
+    (e: 'keypress', ev: KeyboardEvent): any
 }>();
 const text = defineModel({ default: '' });
 function input() {
     emit('input', text.value);
+}
+function keypress(e: KeyboardEvent) {
+    emit('keypress', e);
 }
 defineExpose({
     value: text
@@ -27,7 +31,7 @@ defineExpose({
 </script>
 
 <template>
-    <textarea class="uiTextArea" @input=input v-model=text :title=$props.title :placeholder=$props.placeholder></textarea>
+    <textarea class="uiTextArea" @input="input" @keypress="keypress" v-model=text :title=$props.title :placeholder=$props.placeholder></textarea>
 </template>
 
 <style scoped>

@@ -13,9 +13,6 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     tx: number;
     ty: number;
     ta: number;
-    ix: number;
-    iy: number;
-    ia: number;
     vx: number = 0;
     vy: number = 0;
     va: number = 0;
@@ -27,9 +24,9 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
             angle: data.angle
         });
         this.id = data.id;
-        this.ix = this.tx = this.x;
-        this.iy = this.ty = this.y;
-        this.ia = this.ta = this.angle;
+        this.tx = this.x;
+        this.ty = this.y;
+        this.ta = this.angle;
     }
 
     /**
@@ -38,12 +35,9 @@ export abstract class Entity extends CompositeRenderable<CustomRenderable> {
      */
     lerp(time: number): void {
         const t = (time - Entity.lastTick) * Entity.serverTps / 1000;
-        this.ix = 0.5 * this.ix + 0.5 * this.tx;
-        this.iy = 0.5 * this.iy + 0.5 * this.ty;
-        this.ia = 0.5 * this.ia + 0.5 * this.ta;
-        this.x = this.ix + this.vx * t;
-        this.y = this.iy + this.vy * t;
-        this.angle = this.ia + this.va * t;
+        this.x = 0.5 * this.x + 0.5 * (this.tx + this.vx * t);
+        this.y = 0.5 * this.y + 0.5 * (this.ty + this.vy * t);
+        this.angle = 0.5 * this.angle + 0.5 * (this.ta + this.va * t);
     }
 
     /**

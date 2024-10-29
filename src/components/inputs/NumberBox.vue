@@ -14,10 +14,14 @@ defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'input', value: number): any
+    (e: 'keypress', ev: KeyboardEvent): any
 }>();
 const number = defineModel({ default: 0 });
 function input() {
     emit('input', number.value);
+}
+function keypress(e: KeyboardEvent) {
+    emit('keypress', e);
 }
 defineExpose({
     value: number
@@ -25,7 +29,7 @@ defineExpose({
 </script>
 
 <template>
-    <input type="number" :class="'uiNumberBox ' + ($props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input=input v-model=number :title=$props.title :min=$props.min :max=$props.max :step=$props.step>
+    <input type="number" :class="'uiNumberBox ' + ($props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input="input" @keypress="keypress" v-model=number :title=$props.title :min=$props.min :max=$props.max :step=$props.step>
 </template>
 
 <style scoped>

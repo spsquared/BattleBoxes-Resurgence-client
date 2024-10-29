@@ -3,18 +3,24 @@ import { onMounted, watch } from 'vue';
 import './game';
 import gameInstance from './game';
 import { showFadeScreen } from '@/menu/nav';
+import GameChat from './GameChat.vue';
 
-onMounted(() => {
+const attachGameInstanceStuff = () => {
     gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+};
+onMounted(() => {
     document.getElementById('gameView')?.addEventListener('contextmenu', (e) => e.preventDefault());
+    attachGameInstanceStuff();
 });
 watch(gameInstance, () => {
-    gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+    if (gameInstance.value !== undefined) attachGameInstanceStuff();
 });
+
 </script>
 
 <template>
     <div class="gameView" id="gameView">
+        <GameChat></GameChat>
     </div>
 </template>
 

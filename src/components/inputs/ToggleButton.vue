@@ -19,7 +19,7 @@ defineExpose({
 
 <template>
     <label :class="'uiToggleLabel ' + ($props.disabled ? 'uiToggleLabelDisabled' : '')">
-        <input class="uiToggleInput" type="checkbox" @change=input v-model=checked :title=title :disabled=$props.disabled>
+        <input class="uiToggleInput" type="checkbox" @change="input" v-model=checked :title=title :disabled=$props.disabled>
         <span class="uiToggleSlider"></span>
     </label>
 </template>

@@ -36,7 +36,7 @@ defineExpose({
 </script>
 
 <template>
-    <select class="uiDropdown" @change=input v-model=selected :title=props.title :multiple=props.multiple>
+    <select class="uiDropdown" @change="input" v-model=selected :title=props.title :multiple=props.multiple>
         <option v-for="item in props.items" :key=item.value :value=item.value>
             {{ item.text }}
         </option>
