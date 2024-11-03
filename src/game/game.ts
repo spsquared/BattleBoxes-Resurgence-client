@@ -1,7 +1,7 @@
 // main engine, contains general game logic
 
 import { Socket } from 'socket.io-client';
-import { ref, watch, type Ref } from 'vue';
+import { reactive, ref, watch, type Ref } from 'vue';
 
 import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint } from '@/game/renderer';
 import '@/game/sound';
@@ -22,7 +22,6 @@ canvasRoot.appendChild(canvas);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 export const gameInstance = ref<GameInstance>();
-export const chatHistory: Ref<{ message: ChatMessageSection[], id: number }[]> = ref([]);
 
 // map below, misc entities, players/bullets, particles, map above, debug, ui
 // add particles "webgl" and replace ui 2d with "custom" later
@@ -40,7 +39,17 @@ export class GameInstance {
     readonly loadPromise: Promise<void>;
     private leaveReason?: string = undefined;
 
+    readonly gameInfo: {
+        readonly id: string
+        host: string
+        players: number
+        maxPlayers: number
+        aiPlayers: number
+        public: boolean
+    };
+
     readonly maxChatHistory: number = 100;
+    readonly chatHistory: { message: ChatMessageSection[], id: number }[] = reactive([]);
     readonly camera: { mx: number, my: number } & RenderEngineViewport = {
         x: 0,
         y: 0,
@@ -96,7 +105,7 @@ export class GameInstance {
             checkConnection();
             this.destroy();
         });
-        // socket stuff
+        // stuff
         this.socket.on('tick', (tick) => this.onTick(tick));
         this.socket.on('initPlayerPhysics', (init: {
             tick: number,
@@ -116,12 +125,26 @@ export class GameInstance {
             });
             this.socket.emit('ready');
         });
+        this.gameInfo = reactive({
+            id: this.id,
+            host: '',
+            players: 0,
+            maxPlayers: 0,
+            aiPlayers: 0,
+            public: true
+        });
+        this.socket.on('gameInfo', (info: GameInstance['gameInfo']) => {
+            this.gameInfo.host = info.host;
+            this.gameInfo.players = info.players;
+            this.gameInfo.maxPlayers = info.maxPlayers;
+            this.gameInfo.aiPlayers = info.aiPlayers;
+            this.gameInfo.public = info.public;
+        });
         // chat
-        chatHistory.value.length = 0;
         let chatCount = 0;
         this.socket.on('chatMessage', (message: ChatMessageSection[]) => {
-            chatHistory.value.push({ message: message, id: chatCount++ });
-            if (chatHistory.value.length > this.maxChatHistory) chatHistory.value.shift();
+            this.chatHistory.push({ message: message, id: chatCount++ });
+            if (this.chatHistory.length > this.maxChatHistory) this.chatHistory.shift();
         });
         gameInstance.value = this;
         if (import.meta.env.DEV) (window as any).gameInstance = this;
@@ -175,7 +198,7 @@ export class GameInstance {
                 return;
             }
             const key = e.key.toLowerCase();
-            if ((key != 'i' && key != 'c') || !e.ctrlKey || !e.shiftKey) e.preventDefault();
+            if (((key != 'i' && key != 'c') || !e.ctrlKey || !e.shiftKey) && ((key != '-' && key != '=' || !e.ctrlKey))) e.preventDefault();
             switch (key) {
                 case keybinds.up: ControlledPlayer.self.inputs.up = true; break;
                 case keybinds.down: ControlledPlayer.self.inputs.down = true; break;
@@ -258,7 +281,7 @@ export class GameInstance {
 
     showDebugInfo: boolean = false;
     private readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
-    private mapRenderables: TexturedRenderable[] = [];
+    private mapRenderables: [TexturedRenderable[], TexturedRenderable[]] = [[], []];
     /**
      * Creates a new renderer instance.
      */
@@ -270,7 +293,6 @@ export class GameInstance {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 1,
-                textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[0])),
                 smoothing: false,
                 culling: false
             },
@@ -278,22 +300,19 @@ export class GameInstance {
             {
                 type: 'offscreen2d',
                 canvas: 1,
-                target: 1,
-                textures: []
+                target: 1
             },
             // players/bullets
             {
                 type: 'offscreen2d',
                 canvas: 1,
-                target: 1,
-                textures: []
+                target: 1
             },
             // particles
             // {
             //     type: 'webgl',
             //     canvas: 1,
             //     target: 0,
-            //     textures: [],
             //     clear: true
             // },
             // map above, debug
@@ -301,7 +320,6 @@ export class GameInstance {
                 type: 'offscreen2d',
                 canvas: 1,
                 target: 0,
-                textures: await Promise.all(Array.from(GameMap.maps.values()).sort((a, b) => a.index - b.index).map(async (map) => (await map.textures)[1])),
                 smoothing: false,
                 culling: false
             },
@@ -309,8 +327,7 @@ export class GameInstance {
             {
                 type: '2d',
                 canvas: 0,
-                target: 0,
-                textures: []
+                target: 0
             }
         ]);
         this.renderEngine.onBeforeFrame(() => this.beforeDraw());
@@ -347,11 +364,11 @@ export class GameInstance {
             this.camera.angle = ControlledPlayer.self.angle;
         }
         // generate new map stuff if needed
-        if (this.mapRenderables[0]?.texture != GameMap.current?.index) this.mapRenderables = await this.generateMapRenderables();
+        if (this.mapRenderables[0][0]?.texture != (await GameMap.current?.textures)?.at(0)) this.mapRenderables = await this.generateMapRenderables();
         this.renderEngine.sendFrame(this.camera, [
             // map below
             [
-                ...this.mapRenderables,
+                ...this.mapRenderables[0],
             ],
             // misc entities 
             [],
@@ -364,7 +381,7 @@ export class GameInstance {
             // [],
             // map above, debug
             [
-                ...this.mapRenderables,
+                ...this.mapRenderables[1],
                 ...(this.showDebugInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
                 ...(this.showDebugInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
             ],
@@ -374,15 +391,14 @@ export class GameInstance {
     }
 
     private readonly mapEdgeBuffer = 16;
-    private async generateMapRenderables(): Promise<TexturedRenderable[]> {
+    private async generateMapRenderables(): Promise<[TexturedRenderable[], TexturedRenderable[]]> {
         const width = GameMap.current?.width ?? 0;
         const height = GameMap.current?.height ?? 0;
-        const texture = (await GameMap.current?.textures)?.at(0);
-        const textureWidth = texture?.width ?? 0;
-        const textureHeight = texture?.height ?? 0;
-        const textureIndex = GameMap.current?.index ?? 0;
-        return [
-            new TexturedRenderable({
+        const textures = await GameMap.current?.textures ?? [];
+        const textureWidth = textures[0]?.width ?? 0;
+        const textureHeight = textures[0]?.height ?? 0;
+        const partialEntities: Partial<TexturedRenderable>[] = [
+            {
                 x: width / 2,
                 y: height / 2,
                 width: width,
@@ -390,11 +406,10 @@ export class GameInstance {
                 shiftx: 0,
                 shifty: 0,
                 cropx: textureWidth,
-                cropy: textureHeight,
-                texture: textureIndex
-            }),
+                cropy: textureHeight
+            },
             // edges
-            new TexturedRenderable({
+            {
                 x: -this.mapEdgeBuffer / 2,
                 y: height / 2,
                 width: this.mapEdgeBuffer,
@@ -405,8 +420,8 @@ export class GameInstance {
                 cropy: textureHeight,
                 tileWidth: 1,
                 tileHeight: height
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: width + this.mapEdgeBuffer / 2,
                 y: height / 2,
                 width: this.mapEdgeBuffer,
@@ -417,8 +432,8 @@ export class GameInstance {
                 cropy: textureHeight,
                 tileWidth: 1,
                 tileHeight: height
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: width / 2,
                 y: height + this.mapEdgeBuffer / 2,
                 width: width,
@@ -429,8 +444,8 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: width,
                 tileHeight: 1
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: width / 2,
                 y: -this.mapEdgeBuffer / 2,
                 width: width,
@@ -441,9 +456,9 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: width,
                 tileHeight: 1
-            }),
+            },
             // corners (texture space is +y down, but game space is +y up)
-            new TexturedRenderable({
+            {
                 x: -this.mapEdgeBuffer / 2,
                 y: -this.mapEdgeBuffer / 2,
                 width: this.mapEdgeBuffer,
@@ -454,8 +469,8 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: 1,
                 tileHeight: 1
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: -this.mapEdgeBuffer / 2,
                 y: height + this.mapEdgeBuffer / 2,
                 width: this.mapEdgeBuffer,
@@ -466,8 +481,8 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: 1,
                 tileHeight: 1
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: width + this.mapEdgeBuffer / 2,
                 y: height + this.mapEdgeBuffer / 2,
                 width: this.mapEdgeBuffer,
@@ -478,8 +493,8 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: 1,
                 tileHeight: 1
-            }),
-            new TexturedRenderable({
+            },
+            {
                 x: width + this.mapEdgeBuffer / 2,
                 y: -this.mapEdgeBuffer / 2,
                 width: this.mapEdgeBuffer,
@@ -490,7 +505,11 @@ export class GameInstance {
                 cropy: GameMap.tileSize,
                 tileWidth: 1,
                 tileHeight: 1
-            }),
+            }
+        ];
+        return [
+            partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[0] })),
+            partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[1] }))
         ];
     }
 

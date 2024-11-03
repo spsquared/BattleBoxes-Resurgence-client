@@ -299,11 +299,17 @@ export class ControlledPlayer extends Player {
             dx: this.vx / steps,
             dy: this.vy / steps
         };
+        const mapBounds = {
+            x1: -this.boundingBox.left,
+            x2: (GameMap.current?.width ?? 1) - this.boundingBox.right,
+            y1: -this.boundingBox.bottom - 10,
+            y2: (GameMap.current?.height ?? 1) - this.boundingBox.top + 10,
+        };
         for (let i = step; i <= 1 && (pos.dx != 0 || pos.dy != 0); i += step) {
             pos.lx = pos.x;
             pos.ly = pos.y;
-            pos.x += pos.dx;
-            pos.y += pos.dy;
+            pos.x = Math.max(mapBounds.x1, Math.min(pos.x + pos.dx, mapBounds.x2));
+            pos.y = Math.max(mapBounds.y1, Math.min(pos.y + pos.dy, mapBounds.y2));
             const col1 = this.collidesWithMap(pos.x, pos.y);
             if (col1 !== null) {
                 const col2 = this.collidesWithMap(pos.x, pos.ly);

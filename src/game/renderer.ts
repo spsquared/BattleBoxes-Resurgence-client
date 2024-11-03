@@ -5,9 +5,8 @@ export abstract class CustomRenderable {
     /**
      * Custom draw function invoked for each instance of the entity.
      * @param {OffscreenCanvasRenderingContext2D} ctx Canvas context for the current layer, always an off-screen canvas context
-     * @param {ImageBitmap[]} textures Available textures for the current layer
      */
-    abstract draw(ctx: OffscreenCanvasRenderingContext2D, textures: ImageBitmap[]): void;
+    abstract draw(ctx: OffscreenCanvasRenderingContext2D): void;
 }
 
 /**
@@ -17,9 +16,8 @@ export abstract class CustomReadRenderable {
     /**
      * Custom draw function invoked for each instance of the entity. Can be used to pull data off the current layer.
      * @param {CanvasRenderingContext2D} ctx Canvas context for the current layer, always an on-screen canvas context
-     * @param {ImageBitmap[]} textures Available textures for the current layer
      */
-    abstract draw(ctx: CanvasRenderingContext2D, textures: ImageBitmap[]): void;
+    abstract draw(ctx: CanvasRenderingContext2D): void;
 }
 
 interface LineRenderableLinear {
@@ -210,7 +208,7 @@ export class TextRenderable {
  */
 export interface TexturedRenderable extends Omit<RectangleRenderable, 'color' | 'outline'> {
     /**Texture index of the layer, cropped area will be scaled to fit size */
-    texture: number;
+    texture?: ImageBitmap;
     /**Shift in texture pixels along the texture's X axis */
     shiftx: number;
     /**Shift in texture pixels along the texture's Y axis */
@@ -232,7 +230,7 @@ export class TexturedRenderable {
         this.width = init.width ?? 100;
         this.height = init.height ?? 100;
         this.angle = init.angle ?? 0;
-        this.texture = init.texture ?? 0;
+        this.texture = init.texture;
         this.shiftx = init.shiftx ?? 0;
         this.shifty = init.shifty ?? 0;
         this.cropx = init.cropx ?? this.width - this.shiftx;
@@ -334,7 +332,7 @@ export type RenderEngineLayerDescriptors = ('2d' | 'offscreen2d' | 'webgl')[];
 
 /**
  * Rendering pipeline descriptor to be followed for each frame. This is used to define the relationships
- * between different layers, like copying layers between each other, and defining textures available in each layer.
+ * between different layers, like copying layers between each other with different composite operations.
  * 
  * Canvas `0` is always the rendering canvas - the one shown on screen.
  * 
@@ -352,8 +350,6 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
         target: number
         /**Optionally change the composite operation to use when copying the layer onto another canvas. (default: `'source-over'`) */
         targetCompositing?: GlobalCompositeOperation
-        /**List of textures available to this layer. They can later be accessed by their index through entities. */
-        textures: ImageBitmap[]
         /**Whether to clear the canvas upon starting drawing on the layer. (default: `false`) */
         clear?: boolean
         /**Enable draw smoothing. This is useful when rendering lots of axis-aligned rectangles as smoothing is resource-intense. (default: `true`) */
@@ -364,8 +360,7 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
 };
 
 /**
- * Internal representation of layers, containing the canvases and contexts as well as layer information like
- * target canvases and texture maps.
+ * Internal representation of layers, containing the canvases and contexts as well as layer information like target canvases.
  */
 export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors> = {
     [Index in keyof Descriptors]: ({
@@ -384,7 +379,6 @@ export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors>
         clear: boolean
         smoothing: boolean
         culling: boolean
-        textures: ImageBitmap[]
     }
 };
 
@@ -446,24 +440,23 @@ export interface RenderEngineMetrics {
  *         type: 'offscreen2d',
  *         canvas: 1,
  *         target: 1,
- *         textures: [await createImageBitmap(mapImg)],
  *         clear: true
  *     },
  *     {
  *         type: 'offscreen2d',
  *         canvas: 1,
- *         target: 0,
- *         textures: []
+ *         target: 0
  *     },
  *     {
  *         type: '2d',
  *         canvas: 0,
- *         target: 0,
- *         textures: []
+ *         target: 0
  *     },
  * ]);
+ * 
+ * const texture = await createImageBitmap(mapImg);
  * renderer.sendFrame({ x: 200, y: 150, angle: 0, width: 400, height: 300 }, [
- *     [ new TexturedRenderable({ x: 200, y: 150, width: 400, height: 300, texture: 0 }) ],
+ *     [ new TexturedRenderable({ x: 200, y: 150, width: 400, height: 300, texture: texture }) ],
  *     [ player1, player2, ...arrows ],
  *     [ new PathRenderable({
  *         color: '#FFFF00',
@@ -522,7 +515,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
 
     /**
      * @param {HTMLCanvasElement} baseCanvas Visible canvas to use as canvas `0`
-     * @param {RenderEngineInitPack} layers Layer data including textures and canvas instructions, following the `RenderEngineLayerDescriptors` given
+     * @param {RenderEngineInitPack} layers Layer data following the `RenderEngineLayerDescriptors` given
      */
     constructor(baseCanvas: HTMLCanvasElement, layers: RenderEngineInitPack<LayerDescriptors>) {
         this.baseCanvas = baseCanvas;
@@ -553,8 +546,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 targetCompositing: layer.targetCompositing ?? 'source-over',
                 clear: layer.clear ?? false,
                 smoothing: layer.smoothing ?? true,
-                culling: layer.culling ?? true,
-                textures: layer.textures
+                culling: layer.culling ?? true
             };
             // differentiate layer types
             if (layer.type == '2d') {
@@ -721,7 +713,6 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             const layer = this.layers[i];
             const canvas = layer.canvas;
             const ctx = layer.ctx;
-            const textures = layer.textures;
             if (ctx instanceof CanvasRenderingContext2D || ctx instanceof OffscreenCanvasRenderingContext2D) {
                 const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | PathRenderable | RectangleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable | CustomReadRenderable>)[];
                 // clear canvas and save default state
@@ -751,7 +742,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         compositeRenderableStack.push(entity);
                     } else if (entity instanceof TexturedRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
-                        if (textures[entity.texture] === undefined) brokenTexturedRenderables.push(entity);
+                        if (entity.texture === undefined) brokenTexturedRenderables.push(entity);
                         else texturedRenderables.push(entity);
                     } else if (entity instanceof RectangleRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
@@ -782,7 +773,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
                         ctx.save();
                         try {
-                            entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures);
+                            entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D);
                         } catch (err) {
                             console.error(err);
                         }
@@ -805,7 +796,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         } else if (entity instanceof TexturedRenderable) {
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
                             if (layer.culling && (transformed.x < cullLeft || transformed.x > cullRight || transformed.y < cullBottom || transformed.y > cullTop)) continue;
-                            if (textures[transformed.texture] === undefined) brokenTexturedRenderables.push(transformed);
+                            if (entity.texture === undefined) brokenTexturedRenderables.push(transformed);
                             else texturedRenderables.push(transformed);
                         } else if (entity instanceof RectangleRenderable) {
                             const bucket = simpleRenderableBuckets.get(entity.color);
@@ -861,7 +852,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         for (const component of customComponents) {
                             ctx.save();
                             try {
-                                component.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D, textures.slice());
+                                component.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D);
                             } catch (err) {
                                 console.error(err);
                             }
@@ -877,26 +868,25 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 const drawStart = performance.now();
                 // draw textured entities
                 for (const entity of texturedRenderables) {
-                    const texture = textures[entity.texture];
                     const shiftx = (entity instanceof AnimatedTexturedRenderable ? entity.index * entity.frameWidth : 0) + entity.shiftx;
                     const tiled = entity.tileWidth != entity.width || entity.tileHeight != entity.height;
                     // generate patterns to tile textures
                     if (tiled) {
                         // checks properties and not object (small chance of collision by js wierdness with order of keys)
-                        const patternKey = Object.entries(entity).reduce<string>((prev, curr) => prev + ':' + curr[1], '' + i);
-                        if (this.texturePatternCache.has(patternKey)) {
-                            ctx.fillStyle = this.texturePatternCache.get(patternKey)!;
-                            unusedTexturePatterns.delete(patternKey);
-                        } else {
+                        // const patternKey = Object.entries(entity).reduce<string>((prev, curr) => prev + ':' + curr[1], '' + i);
+                        // if (this.texturePatternCache.has(patternKey)) {
+                        //     ctx.fillStyle = this.texturePatternCache.get(patternKey)!;
+                        //     unusedTexturePatterns.delete(patternKey);
+                        // } else {
                             this.auxCanvas.width = entity.tileWidth * this.viewport.scale;
                             this.auxCanvas.height = entity.tileHeight * this.viewport.scale;
                             this.auxCtx.reset();
                             this.auxCtx.imageSmoothingEnabled = layer.smoothing;
-                            this.auxCtx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, 0, 0, this.auxCanvas.width, this.auxCanvas.height);
+                            this.auxCtx.drawImage(entity.texture!, shiftx, entity.shifty, entity.cropx, entity.cropy, 0, 0, this.auxCanvas.width, this.auxCanvas.height);
                             const pattern = ctx.createPattern(this.auxCanvas, '') as CanvasPattern;
-                            this.texturePatternCache.set(patternKey, pattern);
+                            // this.texturePatternCache.set(patternKey, pattern);
                             ctx.fillStyle = pattern;
-                        }
+                        // }
                     }
                     if (entity.angle % twoPi == 0) {
                         if (tiled) {
@@ -907,7 +897,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             ctx.fillRect(0, 0, entity.width * this.viewport.scale, entity.height * this.viewport.scale);
                             ctx.restore();
                         } else {
-                            ctx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
+                            ctx.drawImage(entity.texture!, shiftx, entity.shifty, entity.cropx, entity.cropy, entity.x - entity.width / 2, -entity.y - entity.height / 2, entity.width, entity.height);
                         }
                     } else {
                         ctx.save();
@@ -921,7 +911,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             ctx.fillRect(0, 0, entity.width * this.viewport.scale, entity.height * this.viewport.scale);
                             ctx.restore();
                         } else {
-                            ctx.drawImage(texture, shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
+                            ctx.drawImage(entity.texture!, shiftx, entity.shifty, entity.cropx, entity.cropy, -entity.width / 2, -entity.height / 2, entity.width, entity.height);
                         }
                         ctx.restore();
                     }

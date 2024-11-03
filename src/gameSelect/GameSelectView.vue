@@ -29,16 +29,7 @@ const options = reactive<{
 
 const joinGameWait = ref<boolean>(false);
 
-interface GameListEntry {
-    id: string
-    host: string
-    options: {
-        maxPlayers: number
-        aiPlayers: number
-        public: boolean
-    }
-    playerCount: number
-}
+type GameListEntry = GameInstance['gameInfo'];
 const gameList = ref<GameListEntry[]>([]);
 const loadGameList = async () => {
     const res = await serverFetch('/games/gameList');
@@ -130,14 +121,14 @@ const createGame = async () => {
                                         </div>
                                         <div class="gameEntryInfo gameEntryInfo2">
                                             <span>
-                                                <span :style="{ color: entry.playerCount == (entry.options.maxPlayers - entry.options.aiPlayers) ? '#F00' : '#050'}">
-                                                    {{ entry.playerCount }}
+                                                <span :style="{ color: entry.players == (entry.maxPlayers - entry.aiPlayers) ? '#F00' : '#050'}">
+                                                    {{ entry.players }}
                                                 </span>
                                                 /
-                                                {{ entry.options.maxPlayers - entry.options.aiPlayers }}
+                                                {{ entry.maxPlayers - entry.aiPlayers }}
                                                 Players
                                             </span>
-                                            <span>{{ entry.options.aiPlayers }} AI</span>
+                                            <span>{{ entry.aiPlayers }} AI</span>
                                         </div>
                                         <Inputs.IconButton class="gameEntryJoinButton forceBorder" text="" title="Join game" img="/assets/arrow-right.svg" img-only background-color="#0C0" @click="joinGame(entry.id)" :disabled="joinGameWait"></Inputs.IconButton>
                                     </div>
@@ -164,11 +155,11 @@ const createGame = async () => {
                     </div>
                     <div class="gameOptionsWrapper">
                         <div class="gameOptionsTable">
-                            <label for="optMaxPlayers">Max Players:</label>
+                            <label for="optMaxPlayers" title="Maximum amount of players, including AI players">Max Players:</label>
                             <Inputs.NumberBox v-model="options.maxPlayers" id="optMaxPlayers" title="Maximum amount of players, including AI players" :min="0" :max="8" :step="1" width="8em"></Inputs.NumberBox>
-                            <label for="optAIPlayers">AI Players:</label>
+                            <label for="optAIPlayers" title="Amount of AI agents to spawn">AI Players:</label>
                             <Inputs.NumberBox v-model="options.aiPlayers" id="optAIPlayers" title="Amount of AI agents to spawn" :min="0" :max="8" :step="1" width="8em"></Inputs.NumberBox>
-                            <label for="optPublic">Public:</label>
+                            <label for="optPublic" title="Allow any player to join from game list">Public:</label>
                             <Inputs.ToggleButton v-model="options.public" id="optPublic" title="Allow any player to join from game list"></Inputs.ToggleButton>
                             <!-- <label for="opt">Option:</label>
                             <Inputs.NumberBox id="opt" title="Description" width="8em"></Inputs.NumberBox> -->

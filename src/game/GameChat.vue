@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUpdated, ref, watch } from 'vue';
-import gameInstance, { chatHistory } from './game';
+import gameInstance from './game';
 
 const chatSize = ref(2);
 const chatBlock = ref<HTMLDivElement | null>(null);
@@ -47,7 +47,7 @@ const onChatKey = (e: KeyboardEvent) => {
     <div class="chatContainer">
         <input type="text" v-model="chatMessage" ref="chatInput" class="chatInput" maxlength="128" placeholder="Press ENTER to chat" @keypress="onChatKey">
         <div class="chatHistory" ref="chatBlock" v-if="gameInstance != null">
-            <div class="chatLine" v-for="message in chatHistory" :key="message.id">
+            <div class="chatLine" v-for="message in gameInstance.chatHistory" :key="message.id">
                 <span v-for="(section, index) in message.message" :key="index" :style="section.style">
                     <span v-if="section.trusted" v-html="section.text"></span>
                     <span v-else>{{ section.text }}</span>
@@ -143,6 +143,7 @@ const onChatKey = (e: KeyboardEvent) => {
     transition: 50ms linear background-color;
     word-break: break-all;
     word-wrap: break-word;
+    white-space-collapse: preserve;
 }
 
 .chatInput:focus+.chatHistory>.chatLine {

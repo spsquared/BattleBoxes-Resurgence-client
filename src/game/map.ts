@@ -7,12 +7,12 @@ import { Collidable } from './entities/player';
  * Global map loader that creates and stores collision entities for maps from server-side.
  */
 export class GameMap {
-    private static mapIndex: number = 0;
     static readonly maps: Map<string, GameMap> = new Map();
     static current?: GameMap = undefined;
     private static tileset: GameTileset | undefined;
 
-    readonly index: number;
+    readonly id: string;
+    readonly name: string;
     readonly width: number;
     readonly height: number;
     readonly collisionGrid: MapCollision[][][];
@@ -23,10 +23,11 @@ export class GameMap {
      * @param json Raw data from server
      * @param name Unique name/ID of map
      */
-    constructor(json: any, name: string) {
+    constructor(json: any, id: string) {
+        this.id = id;
         const raw = json;
-        this.index = GameMap.mapIndex++;
         if (GameMap.tileset === undefined) throw new ReferenceError('Tileset was not loaded before map load');
+        this.name = raw.properties?.find((prop: any) => prop.name == 'name')?.value ?? this.id;
         this.width = raw.width;
         this.height = raw.height;
         // generate collisions
@@ -34,7 +35,7 @@ export class GameMap {
         for (const layer of raw.layers) {
             if (layer.width != this.width || layer.height != this.height || layer.data.length != this.width * this.height) throw new RangeError('Mismatched layer size with map size or data length');
             // don't want spawnpoints on client
-            if (layer.name != 'Spawns') {
+            if (layer.name.toLowerCase() != 'spawns') {
                 // loop through every tile in every layer and add collisions
                 for (let i = 0; i < layer.data.length; i++) {
                     const tile = layer.data[i] - 1;
@@ -68,8 +69,9 @@ export class GameMap {
             const texture = await GameMap.tileset.texture;
             for (const layer of raw.layers) {
                 // definitely no spawnpoints in texture
-                if (layer.name != 'Spawns') {
-                    const above = layer.name.startsWith('A');
+                const lname = layer.name.toLowerCase();
+                if (lname != 'spawns') {
+                    const above = lname.startsWith('a');
                     // loop to add textures
                     for (let i = 0; i < layer.data.length; i++) {
                         const tile = layer.data[i] - 1;
@@ -85,7 +87,7 @@ export class GameMap {
             }
             resolve([await createImageBitmap(canvas), await createImageBitmap(canvas2)]);
         });
-        GameMap.maps.set(name, this);
+        GameMap.maps.set(this.id, this);
     }
 
     /**
@@ -97,9 +99,8 @@ export class GameMap {
             serverFetch('/resources/mapList').then((res) => res.text()).then((maps) => Promise.all(maps.split(', ').map(async (map) => [map, await (await serverFetch('/resources/maps/' + map)).json()])))
         ]);
         this.maps.clear();
-        this.mapIndex = 0;
         this.tileset = new GameTileset(tilesetJson);
-        for (const [name, json] of mapsJson) new GameMap(json, name.replace('.json', ''));
+        for (const [id, json] of mapsJson) new GameMap(json, id.replace('.json', ''));
         await Promise.all(Array.from(this.maps.values(), (map) => map.textures));
     }
 
