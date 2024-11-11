@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
-import { showFadeScreen, startTransitionTo } from '@/menu/nav';
+import { showGameTransition, startTransitionTo } from '@/menu/nav';
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { checkConnection, httpCodeToMessage, serverFetch } from '@/server';
 import * as Inputs from '@/components/inputs';
 import GameSelectBackground from './GameSelectBackground.vue';
 import { executeRecaptcha } from '@/login/recaptcha';
-import { GameInstance } from '@/game/game';
+import { GameInstance, type GameInfo } from '@/game/game';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
 
 const pane = ref<'select' | 'create'>('select');
@@ -29,8 +29,7 @@ const options = reactive<{
 
 const joinGameWait = ref<boolean>(false);
 
-type GameListEntry = GameInstance['gameInfo'];
-const gameList = ref<GameListEntry[]>([]);
+const gameList = ref<GameInfo[]>([]);
 const loadGameList = async () => {
     const res = await serverFetch('/games/gameList');
     if (res.status == 200) {
@@ -51,7 +50,7 @@ onMounted(async () => {
     gameListRefreshTimer = setInterval(loadGameList, 10000);
     gameList.value = [];
     await loadGameList();
-    showFadeScreen.value = false;
+    showGameTransition.value = false;
 });
 onUnmounted(() => {
     if (gameListRefreshTimer != undefined) clearInterval(gameListRefreshTimer);

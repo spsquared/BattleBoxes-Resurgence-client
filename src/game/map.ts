@@ -10,6 +10,7 @@ export class GameMap {
     static readonly maps: Map<string, GameMap> = new Map();
     static current?: GameMap = undefined;
     private static tileset: GameTileset | undefined;
+    static chunkSize: number = 8;
 
     readonly id: string;
     readonly name: string;
@@ -164,3 +165,10 @@ export class MapCollision extends Collidable {
 }
 
 export default GameMap;
+
+if (import.meta.env.DEV) {
+    if ((window as any).GameMap == undefined) {
+        (window as any).GameMap = GameMap;
+        (window as any).GameTileset = GameTileset;
+    }
+}

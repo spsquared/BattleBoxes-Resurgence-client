@@ -6,7 +6,6 @@ import { CompositeRenderable, type CustomRenderable } from '@/game/renderer';
 export abstract class Entity extends CompositeRenderable<CustomRenderable> {
     static tick: number = 0;
     static serverTps: number = 0;
-    static avgServerTps: number = 0;
     static lastTick: number = 0;
 
     readonly id: number;
@@ -77,3 +76,7 @@ export interface EntityTickData {
 }
 
 export default Entity;
+
+if (import.meta.env.DEV) {
+    if ((window as any).Entity == undefined) (window as any).Entity = Entity;
+}

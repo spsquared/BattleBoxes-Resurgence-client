@@ -181,7 +181,7 @@ updateBobAnimation();
                 <div class="p w c3"></div>
                 <div class="p w c4"></div>
                 <!-- big panel to make clicking button more consistent -->
-                 <div class="p a1"></div>
+                <div class="p a1"></div>
             </button>
         </div>
     </div>
@@ -192,18 +192,23 @@ updateBobAnimation();
     0% {
         transform: none;
     }
+
     10% {
         transform: translate3d(0em, 1em, -4em) rotateY(-15deg) rotateX(-5deg) rotateZ(5deg);
     }
+
     25% {
         transform: translate3d(0em, -1.5em, -4em) rotateY(360deg) rotateX(20deg);
     }
+
     50% {
         transform: translate3d(-1em, 0.7em, -6em) rotateY(400deg) rotateX(-30deg) rotateZ(10deg);
     }
+
     53% {
         transform: translate3d(-1em, 0.6em, -6em) rotateY(420deg) rotateX(0deg) rotateZ(15deg);
     }
+
     100% {
         transform: translate3d(1em, -15em, -4em) rotateY(1440deg) rotateX(20deg) rotateZ(-5deg);
     }
@@ -243,7 +248,9 @@ updateBobAnimation();
     cursor: pointer;
 }
 
-.playButton>* {
+/* all panels */
+.p {
+    position: absolute;
     transform-style: preserve-3d;
     pointer-events: auto;
 }
@@ -473,11 +480,6 @@ updateBobAnimation();
 
 .lw {
     background-color: #EEE;
-}
-
-/* all panels */
-.p {
-    position: absolute;
 }
 
 /* front/back/sides */

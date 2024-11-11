@@ -63,7 +63,8 @@ export class Projectile extends Entity {
     };
 
     readonly parent: Player;
-    readonly collisionDebugView: ProjectileCollisionDebugView;
+    /**Separate renderable for debug drawing */
+    readonly debugRenderable: ProjectileCollisionDebugView;
     private readonly animationSpeed: number = 0;
     private readonly animationLength: number = 0;
 
@@ -108,10 +109,10 @@ export class Projectile extends Entity {
                 }));
             }
         }
-        this.collisionDebugView = new ProjectileCollisionDebugView(typeData.vertices);
-        this.collisionDebugView.x = this.tx;
-        this.collisionDebugView.y = this.ty;
-        this.collisionDebugView.angle2 = this.ta;
+        this.debugRenderable = new ProjectileCollisionDebugView(typeData.vertices);
+        this.debugRenderable.x = this.tx;
+        this.debugRenderable.y = this.ty;
+        this.debugRenderable.angle2 = this.ta;
         Projectile.list.set(this.id, this);
     }
 
@@ -122,10 +123,10 @@ export class Projectile extends Entity {
 
     tick(packet: ProjectileTickData): void {
         super.tick(packet);
-        this.collisionDebugView.x = this.tx;
-        this.collisionDebugView.y = this.ty;
-        this.collisionDebugView.boundingBox = packet.boundingBox;
-        this.collisionDebugView.angle2 = this.ta;
+        this.debugRenderable.x = this.tx;
+        this.debugRenderable.y = this.ty;
+        this.debugRenderable.boundingBox = packet.boundingBox;
+        this.debugRenderable.angle2 = this.ta;
     }
 
     /**
@@ -179,3 +180,7 @@ export interface ProjectileTickData extends EntityTickData {
 }
 
 export default Projectile;
+
+if (import.meta.env.DEV) {
+    if ((window as any).Projectile == undefined) (window as any).Projectile = Projectile;
+}

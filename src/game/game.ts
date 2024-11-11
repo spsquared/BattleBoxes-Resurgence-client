@@ -1,9 +1,9 @@
 // main engine, contains general game logic
 
 import { Socket } from 'socket.io-client';
-import { reactive, ref, watch, type Ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 
-import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint } from '@/game/renderer';
+import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint, PathRenderable } from '@/game/renderer';
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
@@ -14,6 +14,7 @@ import GameMap from './map';
 import Entity from './entities/entity';
 import Player, { ControlledPlayer, type PlayerTickData, type Point } from './entities/player';
 import Projectile, { type ProjectileTickData, type ProjectileType } from './entities/projectile';
+import LootBox, { type LootBoxTickData } from './entities/lootbox';
 
 const canvasRoot = document.getElementById('canvasRoot');
 if (canvasRoot === null) throw new Error('Canvas root was not found');
@@ -23,9 +24,22 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 export const gameInstance = ref<GameInstance>();
 
+export type Stats = { avg: number, min: number, max: number };
+
 // map below, misc entities, players/bullets, particles, map above, debug, ui
 // add particles "webgl" and replace ui 2d with "custom" later
 type renderLayers = ['offscreen2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
+
+export type GameInfo = {
+    readonly id: string
+    host: string
+    players: number
+    maxPlayers: number
+    aiPlayers: number
+    playersReady: number
+    public: boolean
+    running: boolean
+};
 
 /**
  * Handles all of the game logic for all of the game. There can only be one!!!
@@ -39,14 +53,7 @@ export class GameInstance {
     readonly loadPromise: Promise<void>;
     private leaveReason?: string = undefined;
 
-    readonly gameInfo: {
-        readonly id: string
-        host: string
-        players: number
-        maxPlayers: number
-        aiPlayers: number
-        public: boolean
-    };
+    readonly gameInfo: GameInfo;
 
     readonly maxChatHistory: number = 100;
     readonly chatHistory: { message: ChatMessageSection[], id: number }[] = reactive([]);
@@ -112,7 +119,8 @@ export class GameInstance {
             physicsBuffer: number,
             physicsResolution: number,
             playerProperties: ControlledPlayer['properties'],
-            projectileTypes: { [key in keyof typeof Projectile.types]: Point[] }
+            projectileTypes: { [key in keyof typeof Projectile.types]: Point[] },
+            chunkSize: number
         }) => {
             ControlledPlayer.physicsTick = init.tick;
             ControlledPlayer.physicsResolution = init.physicsResolution;
@@ -123,6 +131,7 @@ export class GameInstance {
                 typeData.vertices.length = 0;
                 typeData.vertices.push(...points.map<LinearPoint>((p) => ({ type: 'line', x: p.x, y: p.y })));
             });
+            GameMap.chunkSize = init.chunkSize;
             this.socket.emit('ready');
         });
         this.gameInfo = reactive({
@@ -131,14 +140,18 @@ export class GameInstance {
             players: 0,
             maxPlayers: 0,
             aiPlayers: 0,
-            public: true
+            playersReady: 0,
+            public: true,
+            running: false
         });
-        this.socket.on('gameInfo', (info: GameInstance['gameInfo']) => {
+        this.socket.on('gameInfo', (info: GameInfo) => {
             this.gameInfo.host = info.host;
             this.gameInfo.players = info.players;
             this.gameInfo.maxPlayers = info.maxPlayers;
             this.gameInfo.aiPlayers = info.aiPlayers;
+            this.gameInfo.playersReady = info.playersReady;
             this.gameInfo.public = info.public;
+            this.gameInfo.running = info.running;
         });
         // chat
         let chatCount = 0;
@@ -169,21 +182,24 @@ export class GameInstance {
      */
     private onTick(tick: {
         tick: number
-        tps: number
-        avgtps: number
+        tps: Stats & { curr: number, jitter: number }
+        timings: Stats
         heapUsed: number
         heapTotal: number
         map: string
         players: PlayerTickData[]
         projectiles: ProjectileTickData[]
+        lootboxes: LootBoxTickData[]
     }) {
         Entity.tick = tick.tick;
-        Entity.serverTps = tick.tps;
-        Entity.avgServerTps = tick.avgtps;
+        Entity.serverTps = tick.tps.curr;
         GameMap.current = GameMap.maps.get(tick.map);
         Entity.onTick([]);
         Player.onTick(tick.players);
         Projectile.onTick(tick.projectiles);
+        LootBox.onTick(tick.lootboxes);
+        this.overlayRenderer.ticks.tps.server = tick.tps;
+        this.overlayRenderer.ticks.timings.server = tick.timings;
         this.overlayRenderer.serverHeap.used = tick.heapUsed;
         this.overlayRenderer.serverHeap.total = tick.heapTotal;
     }
@@ -193,9 +209,11 @@ export class GameInstance {
         const onKeyDown = (e: KeyboardEvent) => {
             if (ControlledPlayer.self === undefined) return;
             if (this.externalKeybinds.has(e.key)) this.externalKeybinds.get(e.key)!.forEach((cb) => { try { cb(e) } catch (err) { console.error(err); } });
-            if (e.target instanceof HTMLElement && e.target.matches('input[type=text], input[type=number], input[type=password], textarea')) {
-                if (e.key == 'Escape') e.target.blur();
-                return;
+            if (e.target instanceof HTMLElement) {
+                if (e.target.matches('input[type=text], input[type=number], input[type=password], textarea')) {
+                    if (e.key == 'Escape') e.target.blur();
+                    return;
+                } else if (e.target.matches('input[type=button]') || e.target.parentElement?.matches('button')) e.target.blur();
             }
             const key = e.key.toLowerCase();
             if (((key != 'i' && key != 'c') || !e.ctrlKey || !e.shiftKey) && ((key != '-' && key != '=' || !e.ctrlKey))) e.preventDefault();
@@ -228,7 +246,7 @@ export class GameInstance {
             ControlledPlayer.self.inputs.mouseAngle = Math.atan2(this.camera.my, this.camera.mx) + ControlledPlayer.self.angle;
         };
         const onMouseDown = (e: MouseEvent) => {
-            if (ControlledPlayer.self === undefined) return;
+            if (ControlledPlayer.self === undefined || (e.target instanceof HTMLElement && (e.target.matches('input[type=text], input[type=number], input[type=password], textarea, input[type=button]') || e.target.parentElement?.matches('button')))) return;
             onMouseMove(e);
             switch (e.button) {
                 case keybinds.primary: ControlledPlayer.self.inputs.primary = true; break;
@@ -257,7 +275,7 @@ export class GameInstance {
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mousedown', onMouseDown);
         document.addEventListener('mouseup', onMouseUp);
-        document.addEventListener('blur', onBlur);
+        window.addEventListener('blur', onBlur);
         watch(gameInstance, () => {
             if (gameInstance.value?.instanceId !== this.instanceId) {
                 document.removeEventListener('keydown', onKeyDown);
@@ -265,7 +283,7 @@ export class GameInstance {
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mousedown', onMouseDown);
                 document.removeEventListener('mouseup', onMouseUp);
-                document.removeEventListener('blur', onBlur);
+                window.removeEventListener('blur', onBlur);
             }
         });
     }
@@ -281,7 +299,7 @@ export class GameInstance {
 
     showDebugInfo: boolean = false;
     private readonly overlayRenderer: UIOverlayRenderer = new UIOverlayRenderer();
-    private mapRenderables: [TexturedRenderable[], TexturedRenderable[]] = [[], []];
+    private mapRenderables: [TexturedRenderable[], TexturedRenderable[], PathRenderable[]] = [[], [], []];
     /**
      * Creates a new renderer instance.
      */
@@ -340,7 +358,10 @@ export class GameInstance {
     private async beforeDraw(): Promise<void> {
         if (this.renderEngine == undefined) return;
         // spaghetti metrics
-        this.overlayRenderer.metrics = this.renderEngine.metrics;
+        this.overlayRenderer.renderMetrics = this.renderEngine.metrics;
+        const physicsMetrics = ControlledPlayer.physicsPerformanceMetrics;
+        this.overlayRenderer.ticks.tps.client = physicsMetrics.tps;
+        this.overlayRenderer.ticks.timings.client = physicsMetrics.timings;
         if (ControlledPlayer.physicsTick % 20 == 0) {
             const start = performance.now();
             const token = Math.random();
@@ -382,8 +403,10 @@ export class GameInstance {
             // map above, debug
             [
                 ...this.mapRenderables[1],
+                ...(this.showDebugInfo ? this.mapRenderables[2] : []),
                 ...(this.showDebugInfo ? (GameMap.current?.flatCollisionGrid ?? []) : []),
-                ...(this.showDebugInfo ? (Array.from(Projectile.list.values(), (p) => p.collisionDebugView)) : [])
+                ...(this.showDebugInfo ? Array.from(Player.list.values(), (p) => p.debugRenderable) : []),
+                ...(this.showDebugInfo ? Array.from(Projectile.list.values(), (p) => p.debugRenderable) : [])
             ],
             // ui
             [this.overlayRenderer]
@@ -391,7 +414,7 @@ export class GameInstance {
     }
 
     private readonly mapEdgeBuffer = 16;
-    private async generateMapRenderables(): Promise<[TexturedRenderable[], TexturedRenderable[]]> {
+    private async generateMapRenderables(): Promise<[TexturedRenderable[], TexturedRenderable[], PathRenderable[]]> {
         const width = GameMap.current?.width ?? 0;
         const height = GameMap.current?.height ?? 0;
         const textures = await GameMap.current?.textures ?? [];
@@ -507,9 +530,23 @@ export class GameInstance {
                 tileHeight: 1
             }
         ];
+        const ceilChunkWidth = Math.ceil(width / GameMap.chunkSize) * GameMap.chunkSize;
+        const ceilChunkHeight = Math.ceil(height / GameMap.chunkSize) * GameMap.chunkSize;
+        const doubleSize = 2 * GameMap.chunkSize;
+        const chunkBorders: PathRenderable['points'] = [{ type: 'line', x: 0, y: 0 }, { type: 'line', x: ceilChunkWidth, y: 0 }];
+        for (let y = GameMap.chunkSize; y <= ceilChunkHeight; y += GameMap.chunkSize) {
+            if (y % doubleSize == 0) chunkBorders.push({ type: 'line', x: 0, y: y }, { type: 'line', x: ceilChunkWidth, y: y });
+            else chunkBorders.push({ type: 'line', x: ceilChunkWidth, y: y }, { type: 'line', x: 0, y: y });
+        }
+        if (chunkBorders[chunkBorders.length - 1].x != 0) chunkBorders.push({ type: 'line', x: 0, y: ceilChunkHeight });
+        for (let x = 0; x <= ceilChunkWidth; x += GameMap.chunkSize) {
+            if (x % doubleSize == 0) chunkBorders.push({ type: 'line', x: x, y: ceilChunkHeight}, { type: 'line', x: x, y: 0});
+            else chunkBorders.push({ type: 'line', x: x, y: 0}, { type: 'line', x: x, y: ceilChunkHeight});
+        }
         return [
             partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[0] })),
-            partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[1] }))
+            partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[1] })),
+            [new PathRenderable({ color: '#F90', lineWidth: 0.08, points: chunkBorders, cap: 'square' })]
         ];
     }
 
@@ -517,14 +554,27 @@ export class GameInstance {
      * Send a message in public chat.
      * @param message Message
      */
-    sendChatMessage(message: string) {
+    sendChatMessage(message: string): void {
         this.socket.emit('chatMessage', message);
+    }
+
+    private isPlayerReady: boolean = false;
+    /**
+     * Signal to the server if the player is ready to start the round.
+     */
+    markReady(state: boolean): void {
+        this.isPlayerReady = state;
+        this.socket.emit('readyStart', this.isPlayerReady);
+    }
+
+    get playerReady(): boolean {
+        return this.isPlayerReady;
     }
 
     /**
      * Disconnects and closes the game client.
      */
-    destroy() {
+    destroy(): void {
         this.renderEngine?.stop();
         this.socket.disconnect();
         gameInstance.value = undefined;
@@ -535,6 +585,8 @@ export class GameInstance {
         ControlledPlayer.physicsTick = 0;
         ControlledPlayer.self?.remove();
         Player.list.clear();
+        Projectile.list.clear();
+        LootBox.list.clear();
     }
 }
 
@@ -559,8 +611,27 @@ export const loadTexture = async (src: string): Promise<ImageBitmap> => {
 };
 
 class UIOverlayRenderer extends CustomRenderable {
-    metrics?: RenderEngineMetrics;
+    renderMetrics?: RenderEngineMetrics;
     serverHeap: { used: number, total: number } = { used: 0, total: 0 };
+    ticks: {
+        tps: {
+            server: Stats & { curr: number, jitter: number }
+            client: Stats & { curr: number, jitter: number }
+        },
+        timings: {
+            server: Stats
+            client: Stats
+        }
+    } = {
+            tps: {
+                server: { curr: 0, avg: 0, min: 0, max: 0, jitter: 0 },
+                client: { curr: 0, avg: 0, min: 0, max: 0, jitter: 0 }
+            },
+            timings: {
+                server: { avg: 0, min: 0, max: 0 },
+                client: { avg: 0, min: 0, max: 0 }
+            }
+        };
     ping: number = 0;
     detailed: boolean = false;
 
@@ -570,22 +641,28 @@ class UIOverlayRenderer extends CustomRenderable {
         ctx.textBaseline = 'top';
         ctx.resetTransform();
         const lines = [
-            `FPS: ${this.metrics?.fps ?? 'NO DATA'} (${Math.round(this.metrics?.fpsHistory.avg ?? 0)} avg; ${this.metrics?.fpsHistory.min ?? 0} min; ${this.metrics?.fpsHistory.max ?? 0} max)`,
+            `FPS: ${this.renderMetrics?.fps ?? 'NO DATA'} (${(this.renderMetrics?.fpsHistory.avg ?? 0).toFixed(1)} avg; ${this.renderMetrics?.fpsHistory.min ?? 0} min; ${this.renderMetrics?.fpsHistory.max ?? 0} max)`,
             ...(this.detailed ? [
                 'Timings:',
-                `  Total: ${this.metrics?.timings.total.avg.toFixed(1)}ms avg; ${this.metrics?.timings.total.min.toFixed(1)}ms min; ${this.metrics?.timings.total.max.toFixed(1)}ms max`,
-                `  Sort: ${this.metrics?.timings.sort.avg.toFixed(1)}ms avg; ${this.metrics?.timings.sort.min.toFixed(1)}ms min; ${this.metrics?.timings.sort.max.toFixed(1)}ms max`,
-                `  Draw: ${this.metrics?.timings.draw.avg.toFixed(1)}ms avg; ${this.metrics?.timings.draw.min.toFixed(1)}ms min; ${this.metrics?.timings.draw.max.toFixed(1)}ms max`,
+                `  Total: ${this.renderMetrics?.timings.total.avg.toFixed(1)}ms avg; ${this.renderMetrics?.timings.total.min.toFixed(1)}ms min; ${this.renderMetrics?.timings.total.max.toFixed(1)}ms max`,
+                `  Sort: ${this.renderMetrics?.timings.sort.avg.toFixed(1)}ms avg; ${this.renderMetrics?.timings.sort.min.toFixed(1)}ms min; ${this.renderMetrics?.timings.sort.max.toFixed(1)}ms max`,
+                `  Draw: ${this.renderMetrics?.timings.draw.avg.toFixed(1)}ms avg; ${this.renderMetrics?.timings.draw.min.toFixed(1)}ms min; ${this.renderMetrics?.timings.draw.max.toFixed(1)}ms max`,
                 'Server:',
-                `  TPS: ${Entity.serverTps}/${Entity.avgServerTps.toFixed(1)}`,
-                `  Tick: ${ControlledPlayer.physicsTick}/${Entity.tick}`,
+                `  TPS: ${this.ticks.tps.server.curr} (${this.ticks.tps.server.avg.toFixed(1)} avg; ${this.ticks.tps.server.min} min; ${this.ticks.tps.server.max} max) ${this.ticks.tps.server.jitter} jitter`,
+                `  Timings: ${this.ticks.timings.server.avg.toFixed(1)}ms avg; ${this.ticks.timings.server.min.toFixed(1)}ms min; ${this.ticks.timings.server.max.toFixed(1)}ms max`,
+                `  Tick: ${Entity.tick}`,
                 `  Ping: ${this.ping.toFixed(1)}ms`,
+                'Physics:',
+                `  TPS: ${this.ticks.tps.client.curr} (${this.ticks.tps.client.avg.toFixed(1)} avg; ${this.ticks.tps.client.min} min; ${this.ticks.tps.client.max} max) ${this.ticks.tps.client.jitter} jitter`,
+                `  Timings: ${this.ticks.timings.client.avg.toFixed(1)}ms avg; ${this.ticks.timings.client.min.toFixed(1)}ms min; ${this.ticks.timings.client.max.toFixed(1)}ms max`,
+                `  Tick: ${ControlledPlayer.physicsTick} / ${ControlledPlayer.physicsTick - Entity.tick} (${ControlledPlayer.physicsTick > Entity.tick ? 'LEAD' : 'LAG'})`,
                 'Heap:',
                 `  Server: ${this.serverHeap.used.toFixed(2)}MB/${this.serverHeap.total.toFixed(2)}MB`,
                 `  Client: ${(performance as any).memory === undefined ? 'NO DATA' : `${((performance as any).memory.usedJSHeapSize / 1048576).toFixed(2)}MB/${((performance as any).memory.totalJSHeapSize / 1048576).toFixed(2)}MB`}`,
                 'Entities:',
                 `  Pl: ${Player.list.size}`,
-                `  Pj: ${Projectile.list.size}`
+                `  Pj: ${Projectile.list.size}`,
+                `  Lb: ${LootBox.list.size}`
             ] : [])
         ];
         ctx.fillStyle = '#0005';

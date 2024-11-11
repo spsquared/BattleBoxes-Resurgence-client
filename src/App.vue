@@ -6,7 +6,7 @@ import GameView from './game/GameView.vue';
 import GameSelectView from './gameSelect/GameSelectView.vue';
 import MenuView from './menu/MenuView.vue';
 import LoginView from './login/LoginView.vue';
-import FadeTransition from './menu/FadeTransition.vue';
+import GameTransition from './menu/GameTransition.vue';
 import FullscreenModal, { ModalMode } from './components/modal/FullscreenModal.vue';
 import { modal } from './components/modal';
 import { hideRecaptcha } from './login/recaptcha';
@@ -39,7 +39,7 @@ onMounted(() => hideRecaptcha());
     <GameSelectView v-if="currentPage == 'gameSelect'"></GameSelectView>
     <MenuView v-if="currentPage == 'menu'"></MenuView>
     <LoginView></LoginView>
-    <FadeTransition></FadeTransition>
+    <GameTransition></GameTransition>
     <a class="copyrightNotice" href="https://www.gnu.org/licenses/gpl-3.0-standalone.html" target="_blank" v-if="currentPage == 'menu' || !connectionState.loggedIn">Copyright &copy; 2024 Sampleprovider(sp)</a>
     <FullscreenModal ref="modalComponent"></FullscreenModal>
 </template>

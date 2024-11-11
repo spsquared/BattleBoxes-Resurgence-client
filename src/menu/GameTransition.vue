@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { showFadeScreen } from '@/menu/nav';
+import { showGameTransition } from '@/menu/nav';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
 </script>
 
 <template>
     <Transition>
-        <div class="fadeTransition" v-if="showFadeScreen">
+        <!-- replace with different transition? -->
+        <!-- rps doors but there's a spinner -->
+        <!-- maybe WWPPC stream transition but with red rectangles followed by black rectangles, logo + spinner, then green rectangles on out -->
+        <div class="fadeTransition" v-if="showGameTransition">
             <LoadingSpinner class="fadeTransitionSpinner"></LoadingSpinner>
         </div>
     </Transition>

@@ -1075,10 +1075,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         for (const key of unusedTexturePatterns) this.texturePatternCache.delete(key);
         // record performance metrics
         const now = performance.now();
-        this.metricsCounters.frames.push(now);
-        this.metricsCounters.timings.push(now - start);
-        this.metricsCounters.sortTimings.push(sortTotal);
-        this.metricsCounters.drawTimings.push(drawTotal);
+        // use start so 0fps is reportable
+        this.metricsCounters.frames.push(start);
         while (this.metricsCounters.frames[0] <= start - 1000) {
             this.metricsCounters.frames.shift();
             this.metricsCounters.frameHistory.shift();
@@ -1087,6 +1085,9 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             this.metricsCounters.drawTimings.shift();
         }
         this.metricsCounters.frameHistory.push(this.metricsCounters.frames.length);
+        this.metricsCounters.timings.push(now - start);
+        this.metricsCounters.sortTimings.push(sortTotal);
+        this.metricsCounters.drawTimings.push(drawTotal);
         // callbacks for frame completion
         this.nextFramePromises.forEach((resolve) => resolve());
         this.nextFramePromises.clear();

@@ -2,12 +2,12 @@
 import { onMounted, watch } from 'vue';
 import './game';
 import gameInstance from './game';
-import { showFadeScreen } from '@/menu/nav';
+import { showGameTransition } from '@/menu/nav';
 import GameChat from './GameChat.vue';
-import GameInfo from './GameInfo.vue';
+import GameLobbyInfo from './GameLobbyInfo.vue';
 
 const attachGameInstanceStuff = () => {
-    gameInstance.value?.loadPromise.then(() => showFadeScreen.value = false);
+    gameInstance.value?.loadPromise.then(() => showGameTransition.value = false);
 };
 onMounted(() => {
     document.getElementById('gameView')?.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -21,8 +21,7 @@ watch(gameInstance, () => {
 <template>
     <div class="gameView" id="gameView">
         <GameChat></GameChat>
-        <GameInfo></GameInfo>
-        <!-- ready button -->
+        <GameLobbyInfo v-if="!gameInstance?.gameInfo.running"></GameLobbyInfo>
     </div>
 </template>
 

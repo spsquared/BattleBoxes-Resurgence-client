@@ -1,11 +1,16 @@
+import { ref } from 'vue';
+
 import gameInstance from '@/game/game';
-import { LinearPoint, PathRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
+import { CompositeRenderable, LinearPoint, PathRenderable, RectangleRenderable, TextRenderable } from '@/game/renderer';
 import { connectionState } from '@/server';
 
 import GameMap, { MapCollision } from '../map';
 import Entity from './entity';
 
+import type { Ref } from 'vue';
+
 import type { EntityTickData } from './entity';
+import type { CustomRenderable } from '@/game/renderer';
 
 /**
  * Uncontrolled player entity.
@@ -22,6 +27,8 @@ export class Player extends Entity {
     hp: number;
     maxHp: number;
     private readonly healthBarRenderable: RectangleRenderable;
+    /**Separate renderable for debug drawing */
+    readonly debugRenderable: CompositeRenderable<CustomRenderable>;
 
     constructor(data: PlayerTickData) {
         super(data);
@@ -34,24 +41,46 @@ export class Player extends Entity {
         this.components.push(new TextRenderable({ text: this.username, x: 0, y: 0.65, size: 0.2, align: 'center' }))
         this.healthBarRenderable = new RectangleRenderable({ y: 0.5, height: 0.1 });
         this.components.push(this.healthBarRenderable);
-        this.updateHpBar();
+        this.debugRenderable = new CompositeRenderable({ x: this.x, y: this.y, angle: this.angle });
+        this.debugRenderable.components.push(new RectangleRenderable({ x: 0, y: 0, color: '#0F0', width: this.width, height: this.height, outline: 0.04 }));
+        this.debugRenderable.components.push(new RectangleRenderable({ x: this.vx / 2, y: 0, color: '#05D', width: this.vx, height: 0, outline: 0.04 }));
+        this.debugRenderable.components.push(new RectangleRenderable({ x: 0, y: this.vy / 2, color: '#05D', width: 0, height: this.vy, outline: 0.04 }));
         Player.list.set(this.username, this);
     }
 
     tick(packet: PlayerTickData): void {
         super.tick(packet);
+        this.tickUpdateRenderables(packet);
+    }
+
+    /**
+     * Helper for `tick` function that updates debug and health bar renderables.
+     * @param packet Update data from server
+     */
+    tickUpdateRenderables(packet: PlayerTickData): void {
         this.color = packet.color;
         this.hp = packet.hp;
         this.maxHp = packet.maxHp;
         (this.components[0] as RectangleRenderable).color = this.color;
-        this.updateHpBar();
-    }
-
-    updateHpBar(): void {
         this.healthBarRenderable.width = this.hp / this.maxHp * 1.2;
         this.healthBarRenderable.x = -0.6 + this.healthBarRenderable.width / 2;
         this.healthBarRenderable.color = `hsl(${(this.hp - 1) / (this.maxHp - 1) * 120}deg, 100%, 50%)`;
+        this.tickUpdateDebugRenderables();
     }
+
+    /**
+     * Updates debug draw renderables on both server and client physics ticks.
+     */
+    tickUpdateDebugRenderables(): void {
+        this.debugRenderable.x = this.tx;
+        this.debugRenderable.y = this.ty;
+        this.debugRenderable.angle = this.ta;
+        (this.debugRenderable.components[1] as RectangleRenderable).x = this.vx / 2;
+        (this.debugRenderable.components[1] as RectangleRenderable).width = this.vx;
+        (this.debugRenderable.components[2] as RectangleRenderable).y = this.vy / 2;
+        (this.debugRenderable.components[2] as RectangleRenderable).height = this.vy;
+    }
+
 
     /**
      * Removes the player from the player list
@@ -72,8 +101,8 @@ export class Player extends Entity {
                 player.tick(uPlayer);
                 updated.add(player);
             } else {
-                const playerConstructor = (uPlayer.username == connectionState.username) ? ControlledPlayer : Player
-                const newPlayer = new playerConstructor(uPlayer);
+                const PlayerConstructor = (uPlayer.username == connectionState.username) ? ControlledPlayer : Player
+                const newPlayer = new PlayerConstructor(uPlayer);
                 newPlayer.tick(uPlayer);
                 updated.add(newPlayer);
             }
@@ -93,6 +122,7 @@ export class ControlledPlayer extends Player {
     static physicsResolution: number = 64;
     static physicsBuffer: number = 0.01;
     static self?: ControlledPlayer;
+    static readonly selfRef: Ref<ControlledPlayer | null> = ref(null);
 
     gridx: number;
     gridy: number;
@@ -160,7 +190,6 @@ export class ControlledPlayer extends Player {
             fly: ControlledPlayer.baseProperties.fly
         };
     modifiers: { id: number, modifier: Modifiers, length: number }[] = [];
-    private lastPhysicsTick: number = 0;
 
     readonly inputs: {
         left: boolean
@@ -193,20 +222,17 @@ export class ControlledPlayer extends Player {
             new PathRenderable({ points: [new LinearPoint(-this.width / 2, -this.height / 2), new LinearPoint(this.width / 2, -this.height / 2)], color: 'rgba(0, 200, 0, 0)', lineWidth: 4 / ControlledPlayer.physicsResolution }),
         );
         ControlledPlayer.self = this;
+        ControlledPlayer.selfRef.value = this;
     }
 
-    lerp(_time: number): void { }
+    lerp(_time: number): void {
+        _time;
+        // idk do something funny with debug
+    }
 
     tick(packet: PlayerTickData): void {
-        if (packet.overridePosition) {
-            super.tick(packet);
-        } else {
-            this.color = packet.color;
-            this.hp = packet.hp;
-            this.maxHp = packet.maxHp;
-            (this.components[0] as RectangleRenderable).color = this.color;
-            this.updateHpBar();
-        }
+        if (packet.overridePosition) super.tick(packet);
+        else this.tickUpdateRenderables(packet);
         this.properties = packet.properties;
         this.modifiers = packet.modifiers;
     }
@@ -270,6 +296,7 @@ export class ControlledPlayer extends Player {
         (this.components[this.contactEdgeLineOffset + 1] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.right})`;
         (this.components[this.contactEdgeLineOffset + 2] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.top})`;
         (this.components[this.contactEdgeLineOffset + 3] as PathRenderable).color = `rgba(0, 200, 0, ${showContactEdgeDebug * this.contactEdges.bottom})`;
+        this.tickUpdateDebugRenderables();
         // send to server
         gameInstance.value?.socket.emit('tick', {
             tick: ControlledPlayer.physicsTick,
@@ -280,7 +307,6 @@ export class ControlledPlayer extends Player {
                 endy: this.y
             }
         } satisfies ControlledPlayerTickInput);
-        this.lastPhysicsTick = performance.now();
     }
 
     /**
@@ -434,13 +460,26 @@ export class ControlledPlayer extends Player {
         ControlledPlayer.self = undefined;
     }
 
+    private static readonly physicsPerfMetrics: {
+        tpsTimes: number[]
+        tpsHist: number[]
+        tickTimes: number[]
+    } = {
+            tpsTimes: [],
+            tpsHist: [],
+            tickTimes: []
+        };
+
     /**
      * Starts physics tick loop - this is run once and never ends, only slowing down the timer when not in games.
      * Has a PD control loop to match the client tick with the server tick.
      */
     static async startPhysicsTickLoop(): Promise<void> {
-        const kP = 5;
-        const kD = 10;
+        const kP = 3;
+        const kI = 1;
+        const kD = 2;
+        const integralDecay = 0.5;
+        let integral = 0;
         let lastError = 0;
         const session = (window as any).bbrPlayerPhysicsSession = Math.random();
         while ((window as any).bbrPlayerPhysicsSession == session) {
@@ -448,10 +487,47 @@ export class ControlledPlayer extends Player {
             ControlledPlayer.physicsTick++;
             ControlledPlayer.self?.physicsTick();
             const end = performance.now();
+            // use start so 0tps is reportable
+            this.physicsPerfMetrics.tpsTimes.push(start);
+            while (this.physicsPerfMetrics.tpsTimes[0] <= end - 1000) {
+                this.physicsPerfMetrics.tpsTimes.shift();
+                this.physicsPerfMetrics.tpsHist.shift();
+                this.physicsPerfMetrics.tickTimes.shift();
+            }
+            this.physicsPerfMetrics.tpsHist.push(this.physicsPerfMetrics.tpsTimes.length);
+            this.physicsPerfMetrics.tickTimes.push(end - start);
             const error = ControlledPlayer.physicsTick - Entity.tick;
-            if (!document.hidden || ControlledPlayer.physicsTick >= Entity.tick) await new Promise<void>((resolve) => setTimeout(resolve, (1000 / Math.max(2, Entity.serverTps - kP * error - kD * (error - lastError))) - end + start));
+            integral = integralDecay * integral + error;
+            if (!document.hidden || ControlledPlayer.physicsTick >= Entity.tick) await new Promise<void>((resolve) => setTimeout(resolve, (1000 / Math.max(2, Entity.serverTps - (kP * error + kI * integral + kD * (error - lastError)))) - end + start));
             lastError = error;
         }
+    }
+
+    /**
+     * Retrieves physics ticking performance data
+     */
+    static get physicsPerformanceMetrics() {
+        return {
+            tps: {
+                curr: this.physicsPerfMetrics.tpsTimes.length,
+                avg: this.physicsPerfMetrics.tpsHist.reduce((p, c) => p + c, 0) / this.physicsPerfMetrics.tpsHist.length,
+                max: Math.max(...this.physicsPerfMetrics.tpsHist),
+                min: Math.min(...this.physicsPerfMetrics.tpsHist),
+                jitter: Math.max(...this.physicsPerfMetrics.tpsHist) - Math.min(...this.physicsPerfMetrics.tpsHist)
+            },
+            timings: {
+                avg: this.physicsPerfMetrics.tickTimes.reduce((p, c) => p + c, 0) / this.physicsPerfMetrics.tickTimes.length,
+                max: Math.max(...this.physicsPerfMetrics.tickTimes),
+                min: Math.min(...this.physicsPerfMetrics.tickTimes)
+            }
+        }
+    }
+
+    /**
+     * Should never be used
+     */
+    static onTick(): void {
+        throw new Error('Cannot call ControlledPlayer.onTick');
     }
 }
 
@@ -547,3 +623,10 @@ export default Player;
 setTimeout(() => {
     if (gameInstance.value == undefined) ControlledPlayer.startPhysicsTickLoop();
 });
+
+if (import.meta.env.DEV) {
+    if ((window as any).Player == undefined) {
+        (window as any).Player = Player;
+        (window as any).ControlledPlayer = ControlledPlayer;
+    }
+}

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
 import { httpCodeToMessage, serverFetch } from '@/server';
-import { showFadeScreen } from '@/menu/nav';
+import { showGameTransition } from '@/menu/nav';
 import * as Inputs from '@/components/inputs';
 import MenuPlayButton from './MenuPlayButton.vue';
 import { onMounted } from 'vue';
 
-onMounted(() => showFadeScreen.value = false);
+onMounted(() => showGameTransition.value = false);
 
 // delete this later, just set a ref to true
 const settingsnowork = () => {
