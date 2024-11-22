@@ -239,7 +239,8 @@ export class ControlledPlayer extends Player {
 
     /**
      * Player-unique physics tick to reduce input lag. Runs player movement and attempts to synchronize
-     * with server tickrate. Any physics will be validated by the server.
+     * with server tickrate. Synchronization is done by server too (see server documentation).
+     * Any movement is then validated by the server.
      */
     physicsTick(): void {
         // restore coordinates to stop frame interpolation from interfering

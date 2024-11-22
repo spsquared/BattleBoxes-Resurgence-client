@@ -112,7 +112,7 @@ export class Projectile extends Entity {
         this.debugRenderable = new ProjectileCollisionDebugView(typeData.vertices);
         this.debugRenderable.x = this.tx;
         this.debugRenderable.y = this.ty;
-        this.debugRenderable.angle2 = this.ta;
+        // this.debugRenderable.angle2 = this.ta;
         Projectile.list.set(this.id, this);
     }
 
@@ -126,7 +126,8 @@ export class Projectile extends Entity {
         this.debugRenderable.x = this.tx;
         this.debugRenderable.y = this.ty;
         this.debugRenderable.boundingBox = packet.boundingBox;
-        this.debugRenderable.angle2 = this.ta;
+        // this.debugRenderable.angle2 = this.ta;
+        (this.debugRenderable.components[1] as PathRenderable).points = packet.vertices.map((p) => ({ type: 'line', x: p.x - this.tx, y: p.y - this.ty })) as PathRenderable['points']
     }
 
     /**
@@ -151,6 +152,7 @@ export class Projectile extends Entity {
         }
     }
 }
+
 /**
  * Defines a projectile template.
  */
@@ -177,6 +179,7 @@ export interface ProjectileTickData extends EntityTickData {
     readonly type: keyof typeof Projectile.types
     readonly parent: string
     readonly boundingBox: Collidable['boundingBox']
+    vertices: Point[]
 }
 
 export default Projectile;
