@@ -403,12 +403,12 @@ export class ControlledPlayer extends Player {
                         continue;
                     }
                     for (const p of vertices) {
-                        if (col.points.every((q, i) => ControlledPlayer.isWithin(p, q, col.points[(i + 1) % col.points.length]))) {
+                        if (col.points.some((q, i) => ControlledPlayer.isWithin(p, q, col.points[(i + 1) % col.points.length]))) {
                             return col;
                         }
                     }
                     for (const p of col.points) {
-                        if (vertices.every((q, i) => ControlledPlayer.isWithin(p, q, vertices[(i + 1) % vertices.length]))) {
+                        if (vertices.some((q, i) => ControlledPlayer.isWithin(p, q, vertices[(i + 1) % vertices.length]))) {
                             return col;
                         }
                     }
