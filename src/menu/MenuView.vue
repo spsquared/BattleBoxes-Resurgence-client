@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
 import { httpCodeToMessage, serverFetch } from '@/server';
-import { showGameTransition } from '@/menu/nav';
+import transition from '@/menu/nav';
 import * as Inputs from '@/components/inputs';
 import MenuPlayButton from './MenuPlayButton.vue';
 import { onMounted } from 'vue';
 
-onMounted(() => showGameTransition.value = false);
+onMounted(() => transition.end());
 
-// delete this later, just set a ref to true
-const settingsnowork = () => {
+const openSettings = () => {
     modal.showModal({ title: 'oof', content: 'lol that doesn\'t do anything'})
-}
-
+};
 const logout = async () => {
     const res = await serverFetch('/logout', 'POST');
     if (res.status == 200) window.location.reload();
@@ -30,7 +28,7 @@ const logout = async () => {
         <div class="menuFlow">
             <MenuPlayButton></MenuPlayButton>
             <div class="menuButtons">
-                <Inputs.TextButton text="Settings" title="Settings" @click="settingsnowork()" class="menuButton" background-color="dodgerBlue"></Inputs.TextButton>
+                <Inputs.TextButton text="Settings" title="Settings" @click="openSettings()" class="menuButton" background-color="dodgerBlue"></Inputs.TextButton>
                 <Inputs.TextButton text="Log Out" title="Log Out" @click="logout()" class="menuButton" background-color="red"></Inputs.TextButton>
             </div>
         </div>

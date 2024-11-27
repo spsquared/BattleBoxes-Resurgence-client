@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { startTransitionTo } from '@/menu/nav';
+import transition from './nav';
 import { checkConnection } from '@/server';
 import { reactive } from 'vue';
 
@@ -132,7 +132,7 @@ const mouseup = () => {
         button.rz = 0;
         button.sc = 1;
         button.time = 250;
-        setTimeout(() => startTransitionTo('gameSelect'), 1500);
+        setTimeout(() => transition.startTo('gameSelect'), 1500);
         checkConnection();
     }
 };

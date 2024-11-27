@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { modal } from '@/components/modal';
-import { showGameTransition, startTransitionTo } from '@/menu/nav';
+import transition from '@/menu/nav';
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { checkConnection, httpCodeToMessage, serverFetch } from '@/server';
 import * as Inputs from '@/components/inputs';
@@ -50,7 +50,7 @@ onMounted(async () => {
     gameListRefreshTimer = setInterval(loadGameList, 10000);
     gameList.value = [];
     await loadGameList();
-    showGameTransition.value = false;
+    transition.end();
 });
 onUnmounted(() => {
     if (gameListRefreshTimer != undefined) clearInterval(gameListRefreshTimer);
@@ -173,7 +173,7 @@ const createGame = async () => {
                 </div>
             </div>
         </Transition>
-        <Inputs.IconButton class="closeButton" text="Menu" title="Back to menu" img="/assets/arrow-left.svg" background-color="#F00" @click="startTransitionTo('menu')" :disabled="joinGameWait"></Inputs.IconButton>
+        <Inputs.IconButton class="closeButton" text="Menu" title="Back to menu" img="/assets/arrow-left.svg" background-color="#F00" @click="transition.startTo('menu')" :disabled="joinGameWait"></Inputs.IconButton>
     </div>
 </template>
 

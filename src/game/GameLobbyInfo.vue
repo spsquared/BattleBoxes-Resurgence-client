@@ -17,7 +17,7 @@ window.addEventListener('resize', () => {
 });
 
 function ready() {
-    gameInstance.value?.markReady(true);
+    gameInstance.value?.markReady(!gameInstance.value.playerReady);
 }
 </script>
 

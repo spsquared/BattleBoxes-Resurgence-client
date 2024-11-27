@@ -7,7 +7,7 @@ import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRend
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
-import { startTransitionTo } from '@/menu/nav';
+import transition from '@/menu/nav';
 import { checkConnection, createNamespacedSocket, serverFetch } from '@/server';
 
 import GameMap from './map';
@@ -52,6 +52,7 @@ export class GameInstance {
     readonly socket: Socket;
     readonly loadPromise: Promise<void>;
     private leaveReason?: string = undefined;
+    private expectDisconnect: boolean = false;
 
     readonly gameInfo: GameInfo;
 
@@ -69,6 +70,8 @@ export class GameInstance {
     };
     private assetsLoaded: boolean = false;
 
+    acceptInputs: boolean = true;
+
     /**
      * @param id Game ID (namespace)
      * @param authCode Authentication code for connecting to game, supplied when joining
@@ -78,7 +81,7 @@ export class GameInstance {
         if (gameInstance.value !== undefined) throw new Error('Game Instance already exists!');
         this.id = id;
         this.socket = createNamespacedSocket(id, authCode);
-        startTransitionTo('game');
+        transition.startTo('game', 'doors', 1000);
         this.loadPromise = this.loadRenderer();
         this.onResize();
         const resizeListener = () => this.onResize();
@@ -93,13 +96,16 @@ export class GameInstance {
         this.socket.on('leave', (reason?: string) => {
             this.leaveReason = reason;
         });
+        this.socket.on('gameEnd', () => {
+            this.expectDisconnect = true;
+        });
         this.socket.on('disconnect', async (reason) => {
-            await modal.showModal({
+            if (!this.expectDisconnect) await modal.showModal({
                 title: 'Disconnected',
                 content: this.leaveReason ?? reason ?? 'connection lost',
                 color: 'red'
             }).result;
-            startTransitionTo('menu');
+            transition.startTo('menu', 'doors', 1000);
             checkConnection();
             this.destroy();
         });
@@ -208,14 +214,15 @@ export class GameInstance {
     private addInputs() {
         const onKeyDown = (e: KeyboardEvent) => {
             if (ControlledPlayer.self === undefined) return;
-            if (this.externalKeybinds.has(e.key)) this.externalKeybinds.get(e.key)!.forEach((cb) => { try { cb(e) } catch (err) { console.error(err); } });
+            const key = e.key.toLowerCase();
+            if (this.externalKeybinds.has(key)) this.externalKeybinds.get(key)!.forEach((cb) => { try { cb(e) } catch (err) { console.error(err); } });
+            if (!this.acceptInputs) return;
             if (e.target instanceof HTMLElement) {
                 if (e.target.matches('input[type=text], input[type=number], input[type=password], textarea')) {
                     if (e.key == 'Escape') e.target.blur();
                     return;
                 } else if (e.target.matches('input[type=button]') || e.target.parentElement?.matches('button')) e.target.blur();
             }
-            const key = e.key.toLowerCase();
             if (((key != 'i' && key != 'c') || !e.ctrlKey || !e.shiftKey) && ((key != '-' && key != '=' || !e.ctrlKey))) e.preventDefault();
             switch (key) {
                 case keybinds.up: ControlledPlayer.self.inputs.up = true; break;
@@ -240,13 +247,13 @@ export class GameInstance {
 
         };
         const onMouseMove = (e: MouseEvent) => {
-            if (ControlledPlayer.self === undefined) return;
+            if (!this.acceptInputs || ControlledPlayer.self === undefined) return;
             this.camera.mx = e.clientX - window.innerWidth / 2;
             this.camera.my = -e.clientY + window.innerHeight / 2;
             ControlledPlayer.self.inputs.mouseAngle = Math.atan2(this.camera.my, this.camera.mx) + ControlledPlayer.self.angle;
         };
         const onMouseDown = (e: MouseEvent) => {
-            if (ControlledPlayer.self === undefined || (e.target instanceof HTMLElement && (e.target.matches('input[type=text], input[type=number], input[type=password], textarea, input[type=button]') || e.target.parentElement?.matches('button')))) return;
+            if (!this.acceptInputs || ControlledPlayer.self === undefined || (e.target instanceof HTMLElement && (e.target.matches('input[type=text], input[type=number], input[type=password], textarea, input[type=button]') || e.target.parentElement?.matches('button')))) return;
             onMouseMove(e);
             switch (e.button) {
                 case keybinds.primary: ControlledPlayer.self.inputs.primary = true; break;
@@ -289,8 +296,9 @@ export class GameInstance {
     }
 
     addKeybind(key: string, cb: (e: KeyboardEvent) => any) {
-        if (this.externalKeybinds.has(key)) this.externalKeybinds.get(key)!.add(cb);
-        else this.externalKeybinds.set(key, new Set([cb]));
+        const k = key.toLowerCase();
+        if (this.externalKeybinds.has(k)) this.externalKeybinds.get(key)!.add(cb);
+        else this.externalKeybinds.set(k, new Set([cb]));
     }
 
     get loaded() {
@@ -576,8 +584,10 @@ export class GameInstance {
      */
     destroy(): void {
         this.renderEngine?.stop();
+        this.expectDisconnect = true;
         this.socket.disconnect();
         gameInstance.value = undefined;
+        // see "disconnect" event in Socket.IO handlers (in constructor) for more stuff
         if (import.meta.env.DEV) (window as any).gameInstance = undefined;
         if ((window as any).gameInstance !== undefined) throw new Error('buh i need to access gameInstance otherwise its not undefined');
         Entity.serverTps = 1;
