@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { reactive } from 'vue';
 import { currentPage } from './menu/nav';
 
-export const serverHostname = process.env.NODE_ENV == 'production' ? '' : 'https://localhost:9000';
+export const serverHostname = process.env.NODE_ENV == 'production' ? process.env.PROD_SERVER : process.env.DEV_SERVER;
 
 export const createNamespacedSocket = (namespace: string, auth?: string): Socket => {
     return io(`${serverHostname}/${namespace}`, {
