@@ -23,6 +23,6 @@ export const transition = reactive<{
 
 export default transition;
 
-if (process.env.NODE_ENV == 'development') {
+if (import.meta.env.DEV) {
     (window as any).transition = transition;
 }
