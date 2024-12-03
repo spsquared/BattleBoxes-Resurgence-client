@@ -1,4 +1,4 @@
-import { AnimatedTexturedRenderable, CompositeRenderable, type CustomRenderable, PathRenderable, RectangleRenderable, TexturedRenderable } from '@/game/renderer';
+import { AnimatedTexturedRenderable, CompositeRenderable, PathRenderable, RectangleRenderable, TexturedRenderable } from '@/game/renderer';
 
 import Entity from './entity';
 
@@ -8,7 +8,7 @@ import { Collidable, Player, type Point } from './player';
 /**
  * Provides debug visuals for projectiles. (but also hitboxes look cool)
  */
-export class ProjectileCollisionDebugView extends CompositeRenderable<CustomRenderable> {
+export class ProjectileCollisionDebugView extends CompositeRenderable {
     constructor(points: Point[]) {
         super({});
         this.components.push(new RectangleRenderable({

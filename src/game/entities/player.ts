@@ -10,7 +10,6 @@ import Entity from './entity';
 import type { Ref } from 'vue';
 
 import type { EntityTickData } from './entity';
-import type { CustomRenderable } from '@/game/renderer';
 
 /**
  * Uncontrolled player entity.
@@ -28,7 +27,7 @@ export class Player extends Entity {
     maxHp: number;
     private readonly healthBarRenderable: RectangleRenderable;
     /**Separate renderable for debug drawing */
-    readonly debugRenderable: CompositeRenderable<CustomRenderable>;
+    readonly debugRenderable: CompositeRenderable;
 
     constructor(data: PlayerTickData) {
         super(data);

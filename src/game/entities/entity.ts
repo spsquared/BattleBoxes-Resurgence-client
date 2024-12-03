@@ -1,9 +1,9 @@
-import { CompositeRenderable, type CustomRenderable } from '@/game/renderer';
+import { CompositeRenderable } from '@/game/renderer';
 
 /**
  * Generic entity class that represents any entity
  */
-export abstract class Entity extends CompositeRenderable<CustomRenderable> {
+export abstract class Entity extends CompositeRenderable {
     static tick: number = 0;
     static serverTps: number = 0;
     static lastTick: number = 0;

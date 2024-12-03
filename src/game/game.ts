@@ -26,9 +26,9 @@ export const gameInstance = ref<GameInstance>();
 
 export type Stats = { avg: number, min: number, max: number };
 
-// map below, misc entities, players/bullets, particles, map above, debug, ui
-// add particles "webgl" and replace ui 2d with "custom" later
-type renderLayers = ['offscreen2d', 'offscreen2d', 'offscreen2d', 'offscreen2d', '2d'];
+// map below, misc entities, players/bullets, particles, map above, ui
+// add 'webgl' layer for particles
+type renderLayers = ['2d', '2d', '2d', '2d', 'custom'];
 
 export type GameInfo = {
     readonly id: string
@@ -120,6 +120,7 @@ export class GameInstance {
         });
         // stuff
         this.socket.on('tick', (tick) => this.onTick(tick));
+        // init response will tell server player is ready to start physics ticks
         this.socket.on('initPlayerPhysics', (init: {
             tick: number,
             physicsBuffer: number,
@@ -138,6 +139,9 @@ export class GameInstance {
                 typeData.vertices.push(...points.map<LinearPoint>((p) => ({ type: 'line', x: p.x, y: p.y })));
             });
             GameMap.chunkSize = init.chunkSize;
+            // set tps to 40 to reduce chances of getting kicked network latency causes player
+            // to fall behind as server tick reaches player too late to start ticking in time
+            Entity.serverTps = 40;
             this.socket.emit('ready');
         });
         this.gameInfo = reactive({
@@ -316,7 +320,7 @@ export class GameInstance {
         this.renderEngine = new RenderEngine<renderLayers>(canvas, [
             // map below
             {
-                type: 'offscreen2d',
+                type: '2d',
                 canvas: 1,
                 target: 1,
                 smoothing: false,
@@ -324,13 +328,13 @@ export class GameInstance {
             },
             // misc. entities
             {
-                type: 'offscreen2d',
+                type: '2d',
                 canvas: 1,
                 target: 1
             },
             // players/bullets
             {
-                type: 'offscreen2d',
+                type: '2d',
                 canvas: 1,
                 target: 1
             },
@@ -343,7 +347,7 @@ export class GameInstance {
             // },
             // map above, debug
             {
-                type: 'offscreen2d',
+                type: '2d',
                 canvas: 1,
                 target: 0,
                 smoothing: false,
@@ -351,7 +355,7 @@ export class GameInstance {
             },
             // ui (replace with "custom" later)
             {
-                type: '2d',
+                type: 'custom',
                 canvas: 0,
                 target: 0
             }
@@ -645,7 +649,7 @@ class UIOverlayRenderer extends CustomRenderable {
     ping: number = 0;
     detailed: boolean = false;
 
-    draw(ctx: OffscreenCanvasRenderingContext2D) {
+    draw(ctx: CanvasRenderingContext2D) {
         ctx.font = '14px \'Source Code Pro\'';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';

@@ -1,23 +1,14 @@
+import * as workerPath from 'file-loader?name=[name].js!./renderworker';
+
 /**
  * An entity with a custom `draw` function.
  */
 export abstract class CustomRenderable {
     /**
      * Custom draw function invoked for each instance of the entity.
-     * @param {OffscreenCanvasRenderingContext2D} ctx Canvas context for the current layer, always an off-screen canvas context
+     * @param {OffscreenCanvasRenderingContext2D} ctx Canvas context for the current layer
      */
     abstract draw(ctx: OffscreenCanvasRenderingContext2D): void;
-}
-
-/**
- * An entity with a custom `draw` function that can read the canvas data as well as write to it.
- */
-export abstract class CustomReadRenderable {
-    /**
-     * Custom draw function invoked for each instance of the entity. Can be used to pull data off the current layer.
-     * @param {CanvasRenderingContext2D} ctx Canvas context for the current layer, always an on-screen canvas context
-     */
-    abstract draw(ctx: CanvasRenderingContext2D): void;
 }
 
 interface LineRenderableLinear {
@@ -261,7 +252,7 @@ export class AnimatedTexturedRenderable extends TexturedRenderable {
 /**
  * A complex entity that contains subcomponents (other entities) parented to it, following its transform.
  */
-export interface CompositeRenderable<CustomEntity extends CustomRenderable | CustomReadRenderable> {
+export interface CompositeRenderable {
     /**X coordinate of center */
     x: number;
     /**Y coordinate of center */
@@ -272,11 +263,11 @@ export interface CompositeRenderable<CustomEntity extends CustomRenderable | Cus
      * Subcomponents: `CustomRenderable` or `CustomReadRenderable` (depends on layer type),
      * `PathRenderable`, `RectangleRenderable`, `TextRenderable`, and subclasses
      */
-    components: (CompositeRenderable<CustomEntity> | CustomEntity | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable)[]
+    components: (CompositeRenderable | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable)[]
 }
 
-export class CompositeRenderable<CustomEntity extends CustomRenderable | CustomReadRenderable> {
-    constructor(init: Partial<CompositeRenderable<CustomEntity>>) {
+export class CompositeRenderable {
+    constructor(init: Partial<CompositeRenderable>) {
         this.x = init.x ?? 0;
         this.y = init.y ?? 0;
         this.angle = init.angle ?? 0;
@@ -318,17 +309,15 @@ export class RenderEngineError extends Error {
 /**
  * Describes the layers of the rendering pipeline from bottom to top.
  * 
- * * **`2d`**: Render in 2D to a `HTMLCanvasElement`, using a Web `Worker`. Allows `CustomReadRenderable`,
- * `PathRenderable`,  `RectangleRenderable`, `TextRenderable`, and `CompositeRenderable<CustomReadRenderable>`
- * entities (includes subclasses like `TexturedRenderable`)
- * 
- * * **`offscreen2d`**: Render in 2D to an `OffscreenCanvas`, using a Web `Worker`. Allows `CustomRenderable`,
- * `PathRenderable`,  `RectangleRenderable`, `TextRenderable`, and `CompositeRenderable<CustomRenderable>`
+ * * **`2d`**: Render in 2D to an `OffscreenCanvas`, using a Web `Worker`. Allows,
+ * `PathRenderable`,  `RectangleRenderable`, `TextRenderable`, and `CompositeRenderable`
  * entities (includes subclasses like `TexturedRenderable`)
  * 
  * * **`webgl`**: Render in 3D or 2D to an `OffscreenCanvas`. Useful for large numbers of simple entities or 3D effects.
+ * 
+ * * **`custom`**: Render in 2D with direct canvas access. Only allows `CustomRenderable` entities.
  */
-export type RenderEngineLayerDescriptors = ('2d' | 'offscreen2d' | 'webgl')[];
+export type RenderEngineLayerDescriptors = ('2d' | 'webgl' | 'custom')[];
 
 /**
  * Rendering pipeline descriptor to be followed for each frame. This is used to define the relationships
@@ -342,9 +331,11 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
     [Index in keyof Descriptors]: {
         /**The layer type, mirroring the type given in the `RenderEngineLayerDescriptors` of the `RenderEngine` constructor. */
         type: Descriptors[Index]
-        /**The canvas to use - canvas `0` is always the main rendering canvas passed into the `RenderEngine` constructor. */
+        /**The canvas to use - canvas `0` is always the main rendering canvas passed into the `RenderEngine` constructor. "custom"` layers cannot use this) */
         canvas: number
-        /**Optionally change the composite operation of entities drawn onto the layer. */
+        /**Optionally change the CSS filter of entities drawn onto the layer. (default: none) */
+        filter?: string
+        /**Optionally change the composite operation of entities drawn onto the layer. (default: `'source-over'`) */
         compositing?: GlobalCompositeOperation
         /**The target canvas to paint the layer to after completion. Leaving this the same as the `canvas` property will cause the `RenderEngine` to skip the copying step. */
         target: number
@@ -363,16 +354,14 @@ export type RenderEngineInitPack<Descriptors extends RenderEngineLayerDescriptor
  * Internal representation of layers, containing the canvases and contexts as well as layer information like target canvases.
  */
 export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors> = {
-    [Index in keyof Descriptors]: ({
-        canvas: HTMLCanvasElement
-        ctx: CanvasRenderingContext2D
-    } | {
+    [Index in keyof Descriptors]: ([{
         canvas: OffscreenCanvas
         ctx: OffscreenCanvasRenderingContext2D
-    } | {
+    }, Descriptors[Index] & ('2d' | 'custom')][0] | [{
         canvas: OffscreenCanvas
         ctx: WebGL2RenderingContext
-    }) & {
+    }, Descriptors[Index] & 'webgl'][0]) & {
+        filter: string
         compositing: GlobalCompositeOperation
         targetCanvas: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
         targetCompositing: GlobalCompositeOperation
@@ -388,9 +377,9 @@ export type RenderEngineLayers<Descriptors extends RenderEngineLayerDescriptors>
  */
 export type RenderEngineFrameInput<Descriptors extends RenderEngineLayerDescriptors> = {
     [Index in keyof Descriptors]:
-    [(CustomReadRenderable | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomReadRenderable>)[], Descriptors[Index] & '2d'][0] |
-    [(CustomRenderable | PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable>)[], Descriptors[Index] & 'offscreen2d'][0] |
-    [(WebGLRectangleRenderable | WebGLTexturedRenderable)[], Descriptors[Index] & 'webgl'][0]
+    [(PathRenderable | RectangleRenderable | CircleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable)[], Descriptors[Index] & '2d'][0] |
+    [(WebGLRectangleRenderable | WebGLTexturedRenderable)[], Descriptors[Index] & 'webgl'][0] |
+    [CustomRenderable[], Descriptors[Index] & 'custom'][0]
 };
 
 /**
@@ -479,8 +468,10 @@ export interface RenderEngineMetrics {
  * extending `TexturedRenderable`). The final layer draws a yellow quadratic curve between `player1` and `player2`,
  * with the control point being a mix of their coordinates.
  */
-export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDescriptors> {
+export class RenderEngine<LayerDescriptors extends RenderEngineLayerDescriptors> {
     private readonly baseCanvas: HTMLCanvasElement;
+    private readonly worker: Worker;
+    private readonly workerPromise: Promise<void>;
     private readonly frame: RenderEngineFrameInput<LayerDescriptors> = [] as RenderEngineFrameInput<LayerDescriptors>;
     private readonly viewport: RenderEngineViewport = {
         x: 0,
@@ -495,23 +486,6 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     private fr: number = 60;
     private readonly layers: RenderEngineLayers<LayerDescriptors>;
     private drawing: boolean = true;
-    private readonly metricsCounters: {
-        frames: number[]
-        frameHistory: number[]
-        timings: number[]
-        sortTimings: number[]
-        drawTimings: number[]
-    } = {
-            frames: [],
-            frameHistory: [],
-            timings: [],
-            sortTimings: [],
-            drawTimings: []
-        };
-    // Auxillary canvas used in intermediate drawing for some textures
-    private readonly auxCanvas: OffscreenCanvas;
-    private readonly auxCtx: OffscreenCanvasRenderingContext2D;
-    private readonly missingTexture: Promise<ImageBitmap>;
 
     /**
      * @param {HTMLCanvasElement} baseCanvas Visible canvas to use as canvas `0`
@@ -520,28 +494,23 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
     constructor(baseCanvas: HTMLCanvasElement, layers: RenderEngineInitPack<LayerDescriptors>) {
         this.baseCanvas = baseCanvas;
         this.layers = [] as RenderEngineLayers<LayerDescriptors>;
-        const canvases: (HTMLCanvasElement | OffscreenCanvas)[] = [this.baseCanvas];
+        const canvases: OffscreenCanvas[] = [this.baseCanvas.transferControlToOffscreen()];
         // create canvases
         for (const layer of layers) {
             if (layer.canvas < 0) throw new RenderEngineError('Cannot have negative canvas index');
-            if (layer.type == '2d') {
-                canvases[layer.canvas] ??= document.createElement('canvas');
-                if (canvases[layer.canvas] instanceof OffscreenCanvas) throw new RenderEngineError(`Invalid configuration: "2d" layer cannot use OffscreenCanvas of canvas ${layer.canvas}`);
-            } else if (layer.type == 'offscreen2d' || layer.type == 'webgl') {
-                canvases[layer.canvas] ??= new OffscreenCanvas(1, 1);
-                if (canvases[layer.canvas] instanceof HTMLCanvasElement) throw new RenderEngineError(`Invalid configuration: "${layer.type}" layer cannot use HTMLCanvasElement of canvas ${layer.canvas}`);
-            }
+            canvases[layer.canvas] ??= new OffscreenCanvas(1, 1);
         }
         // create layer contexts
         for (const layer of layers) {
             // grab target canvases (typescript keeps messing up types for getContext buh)
             const targetCanvas = canvases[layer.target];
             if (targetCanvas == undefined) throw new RenderEngineError(`Invalid configuration: Target canvas ${layer.target} does not exist`);
-            const targetCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = targetCanvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-            if (targetCtx === null) throw new RenderEngineError('Canvas2D context is not supported');
+            const targetCtx = targetCanvas.getContext('2d');
+            if (targetCtx === null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
             // stuff that'll be used by all the layers
             const layerProps = {
                 compositing: layer.compositing ?? 'source-over',
+                filter: layer.filter ?? '',
                 targetCanvas: layer.target == layer.canvas ? null : targetCtx,
                 targetCompositing: layer.targetCompositing ?? 'source-over',
                 clear: layer.clear ?? false,
@@ -549,17 +518,8 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 culling: layer.culling ?? true
             };
             // differentiate layer types
-            if (layer.type == '2d') {
-                const canvas = canvases[layer.canvas] as HTMLCanvasElement;
-                const ctx = canvas.getContext('2d');
-                if (ctx === null) throw new RenderEngineError('Canvas2D context is not supported');
-                this.layers.push({
-                    canvas: canvas,
-                    ctx: ctx,
-                    ...layerProps
-                });
-            } else if (layer.type == 'offscreen2d') {
-                const canvas = canvases[layer.canvas] as OffscreenCanvas;
+            if (layer.type == '2d' || layer.type == 'custom') {
+                const canvas = canvases[layer.canvas];
                 const ctx = canvas.getContext('2d');
                 if (ctx === null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
                 this.layers.push({
@@ -568,7 +528,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     ...layerProps
                 });
             } else if (layer.type == 'webgl') {
-                const canvas = canvases[layer.canvas] as OffscreenCanvas;
+                const canvas = canvases[layer.canvas];
                 const ctx = canvas.getContext('webgl2');
                 if (ctx === null) throw new RenderEngineError('WebGL2 context is not supported');
                 this.layers.push({
@@ -578,20 +538,11 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 });
             }
         }
-        // create aux canvas
-        this.auxCanvas = new OffscreenCanvas(1, 1);
-        const auxCtx = this.auxCanvas.getContext('2d');
-        if (auxCtx == null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
-        this.auxCtx = auxCtx;
-        this.auxCanvas.width = 2;
-        this.auxCanvas.height = 2;
-        this.auxCtx.reset();
-        this.auxCtx.fillStyle = '#000';
-        this.auxCtx.fillRect(0, 0, 2, 2);
-        this.auxCtx.fillStyle = '#F0F';
-        this.auxCtx.fillRect(0, 0, 1, 1);
-        this.auxCtx.fillRect(1, 1, 1, 1);
-        this.missingTexture = createImageBitmap(this.auxCanvas);
+        // create and set up worker
+        this.worker = new Worker(workerPath);
+        this.workerPromise = new Promise((resolve) => {
+            // handshake after transfering canvases
+        });
         // start draw loop
         const startDraw = async () => {
             while (this.drawing) {
@@ -672,7 +623,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
      * @param sinVal Sine of hte parent entity's angle
      * @returns Transformed renderable in global space
      */
-    private transformRenderable<Renderable extends CompositeRenderable<CustomRenderable | CustomReadRenderable> | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable<CustomRenderable | CustomReadRenderable>, cosVal: number, sinVal: number): Renderable {
+    private transformRenderable<Renderable extends CompositeRenderable | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable, cosVal: number, sinVal: number): Renderable {
         return {
             ...entity,
             x: parent.x + entity.x * cosVal - entity.y * sinVal,
@@ -714,7 +665,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
             const canvas = layer.canvas;
             const ctx = layer.ctx;
             if (ctx instanceof CanvasRenderingContext2D || ctx instanceof OffscreenCanvasRenderingContext2D) {
-                const renderables = this.frame[i] as (CustomRenderable | CustomReadRenderable | PathRenderable | RectangleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable<CustomRenderable | CustomReadRenderable>)[];
+                const renderables = this.frame[i] as (CustomRenderable | PathRenderable | RectangleRenderable | TexturedRenderable | TextRenderable | CompositeRenderable)[];
                 // clear canvas and save default state
                 if (layer.clear) ctx.reset();
                 else ctx.restore();
@@ -735,7 +686,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                 const simpleRenderableBuckets: Map<string, [RectangleRenderable[], CircleRenderable[], CircleRenderable[], TextRenderable[], PathRenderable[]]> = new Map();
                 const texturedRenderables: TexturedRenderable[] = [];
                 const brokenTexturedRenderables: TexturedRenderable[] = [];
-                const compositeRenderableStack: CompositeRenderable<CustomRenderable | CustomReadRenderable>[] = [];
+                const compositeRenderableStack: CompositeRenderable[] = [];
                 for (const entity of renderables) {
                     if (entity instanceof CompositeRenderable) {
                         if (layer.culling && (entity.x < cullLeft || entity.x > cullRight || entity.y < cullBottom || entity.y > cullTop)) continue;
@@ -770,7 +721,7 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                             if (bucket === undefined) simpleRenderableBuckets.set(entity.stroke, [[], [], [entity], [], []]);
                             else bucket[2].push(entity);
                         }
-                    } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
+                    } else if (entity instanceof CustomRenderable) {
                         ctx.save();
                         try {
                             entity.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D);
@@ -787,7 +738,6 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                     // carry transformations through to all children (mild spaghetti)
                     const cosVal = Math.cos(compositeEntity.angle);
                     const sinVal = Math.sin(compositeEntity.angle);
-                    const customComponents: (CustomRenderable | CustomReadRenderable)[] = [];
                     for (const entity of compositeEntity.components) {
                         if (entity instanceof CompositeRenderable) {
                             const transformed = this.transformRenderable(entity, compositeEntity, cosVal, sinVal);
@@ -839,26 +789,9 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                                 if (bucket === undefined) simpleRenderableBuckets.set(entity.stroke, [[], [], [transformed], [], []]);
                                 else bucket[2].push(transformed);
                             }
-                        } else if (entity instanceof CustomRenderable || entity instanceof CustomReadRenderable) {
-                            customComponents.push(entity);
                         } else {
                             console.warn(new RenderEngineError('Unrecognizable entity in pipeline (under CompositeRenderable), discarding!'));
                         }
-                    }
-                    if (customComponents.length != 0) {
-                        ctx.save();
-                        ctx.translate(compositeEntity.x, compositeEntity.y);
-                        if (compositeEntity.angle) ctx.rotate(compositeEntity.angle);
-                        for (const component of customComponents) {
-                            ctx.save();
-                            try {
-                                component.draw(ctx as CanvasRenderingContext2D & OffscreenCanvasRenderingContext2D);
-                            } catch (err) {
-                                console.error(err);
-                            }
-                            ctx.restore();
-                        }
-                        ctx.restore();
                     }
                 }
                 sortTotal += performance.now() - sortStart;
@@ -878,14 +811,14 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
                         //     ctx.fillStyle = this.texturePatternCache.get(patternKey)!;
                         //     unusedTexturePatterns.delete(patternKey);
                         // } else {
-                            this.auxCanvas.width = entity.tileWidth * this.viewport.scale;
-                            this.auxCanvas.height = entity.tileHeight * this.viewport.scale;
-                            this.auxCtx.reset();
-                            this.auxCtx.imageSmoothingEnabled = layer.smoothing;
-                            this.auxCtx.drawImage(entity.texture!, shiftx, entity.shifty, entity.cropx, entity.cropy, 0, 0, this.auxCanvas.width, this.auxCanvas.height);
-                            const pattern = ctx.createPattern(this.auxCanvas, '') as CanvasPattern;
-                            // this.texturePatternCache.set(patternKey, pattern);
-                            ctx.fillStyle = pattern;
+                        this.auxCanvas.width = entity.tileWidth * this.viewport.scale;
+                        this.auxCanvas.height = entity.tileHeight * this.viewport.scale;
+                        this.auxCtx.reset();
+                        this.auxCtx.imageSmoothingEnabled = layer.smoothing;
+                        this.auxCtx.drawImage(entity.texture!, shiftx, entity.shifty, entity.cropx, entity.cropy, 0, 0, this.auxCanvas.width, this.auxCanvas.height);
+                        const pattern = ctx.createPattern(this.auxCanvas, '') as CanvasPattern;
+                        // this.texturePatternCache.set(patternKey, pattern);
+                        ctx.fillStyle = pattern;
                         // }
                     }
                     if (entity.angle % twoPi == 0) {
@@ -1125,27 +1058,11 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         await new Promise<void>((resolve) => this.nextFramePromises.add(resolve));
     }
 
-    private getStats(arr: number[]): Stats {
-        return {
-            avg: arr.reduce((p, c) => p + c, 0) / arr.length,
-            min: Math.min(...arr),
-            max: Math.max(...arr)
-        };
-    }
-
     /**
      * Performance metrics like framerates
      */
     get metrics(): RenderEngineMetrics {
-        return {
-            fps: this.metricsCounters.frames.length,
-            fpsHistory: this.getStats(this.metricsCounters.frameHistory),
-            timings: {
-                total: this.getStats(this.metricsCounters.timings),
-                sort: this.getStats(this.metricsCounters.sortTimings),
-                draw: this.getStats(this.metricsCounters.drawTimings)
-            }
-        }
+        return 
     }
 
     /**
@@ -1156,3 +1073,14 @@ export default class RenderEngine<LayerDescriptors extends RenderEngineLayerDesc
         this.layers.length = 0;
     }
 }
+
+export const createTextureFromFunction = async (width: number, height: number, cb: (ctx: CanvasRenderingContext2D) => any): Promise<ImageBitmap> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    await cb(ctx!);
+    return await createImageBitmap(canvas);
+};
+
+export default RenderEngine;
