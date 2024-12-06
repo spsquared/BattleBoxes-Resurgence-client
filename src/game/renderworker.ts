@@ -1,21 +1,11 @@
-import { type RenderEngineLayerDescriptors, type RenderEngineFrameInput, type RenderEngineViewport, RenderEngineError, type RenderEngineLayers } from "./renderer";
+import {
+    CompositeRenderable, RectangleRenderable, RenderEngineError, RenderWorkerMessages,
+    TextRenderable, TexturedRenderable
+} from './renderer';
 
-export enum RenderWorkerMessages {
-    /**Main -> Worker | Initialization pack, includes layer data */
-    INIT,
-    /**Worker -> Main | Initialization is done and worker is ready to process frames */
-    INITREADY,
-    /**Main -> Worker | New data for a frame */
-    FRAMEDATA,
-    /**Main -> Worker | Prompts worker to begin drawing a frame */
-    FRAMETICK,
-    /**Worker -> Main | Drawing was interrupted by a custom layer and main thread */
-    FRAMEINTP,
-    /**Main -> Worker | Custom layer*/
-    FRAMECONT,
-
-    METRICS
-}
+import type {
+    RenderEngineFrameInput, Stats, RenderEngineInitPack, RenderEngineLayerDescriptors, RenderEngineLayers, RenderEngineViewport
+} from './renderer';
 
 /**
  * Worker thread that runs rendering in a separate thread. The main thread creates a worker for each `RenderEngine`
@@ -39,7 +29,7 @@ export default class RenderEngineWorker<LayerDescriptors extends RenderEngineLay
         height: 0,
         scale: 1
     };
-    
+
     private readonly layers: RenderEngineLayers<LayerDescriptors>;
     // Auxillary canvas used in intermediate drawing for some textures
     private readonly auxCanvas: OffscreenCanvas;
@@ -63,8 +53,52 @@ export default class RenderEngineWorker<LayerDescriptors extends RenderEngineLay
     /**
      * @param {RenderEngineInitPack} layers Layer data following the `RenderEngineLayerDescriptors` given
      */
-    constructor(layers: RenderEngineInitPack<LayerDescriptors>) {
-        // create canvases from layers
+    constructor(mainCanvas: OffscreenCanvas, layers: RenderEngineInitPack<LayerDescriptors>) {
+        this.layers = [] as RenderEngineLayers<LayerDescriptors>;
+        const canvases = [mainCanvas];
+        // create canvases
+        for (const layer of layers) {
+            if (layer.canvas < 0) throw new RenderEngineError('Cannot have negative canvas index');
+            canvases[layer.canvas] ??= new OffscreenCanvas(1, 1);
+        }
+        // create layer contexts
+        for (const layer of layers) {
+            // grab target canvases (typescript keeps messing up types for getContext buh)
+            const targetCanvas = canvases[layer.target];
+            if (targetCanvas == undefined) throw new RenderEngineError(`Invalid configuration: Target canvas ${layer.target} does not exist`);
+            const targetCtx = targetCanvas.getContext('2d');
+            if (targetCtx === null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
+            // stuff that'll be used by all the layers
+            const layerProps = {
+                compositing: layer.compositing ?? 'source-over',
+                filter: layer.filter ?? '',
+                targetCanvas: layer.target == layer.canvas ? null : targetCtx,
+                targetCompositing: layer.targetCompositing ?? 'source-over',
+                clear: layer.clear ?? false,
+                smoothing: layer.smoothing ?? true,
+                culling: layer.culling ?? true
+            };
+            // differentiate layer types
+            if (layer.type == '2d' || layer.type == 'custom') {
+                const canvas = canvases[layer.canvas];
+                const ctx = canvas.getContext('2d');
+                if (ctx === null) throw new RenderEngineError('OffscreenCanvas2D context is not supported');
+                this.layers.push({
+                    canvas: canvas,
+                    ctx: ctx,
+                    ...layerProps
+                });
+            } else if (layer.type == 'webgl') {
+                const canvas = canvases[layer.canvas];
+                const ctx = canvas.getContext('webgl2');
+                if (ctx === null) throw new RenderEngineError('WebGL2 context is not supported');
+                this.layers.push({
+                    canvas: canvas,
+                    ctx: ctx,
+                    ...layerProps
+                });
+            }
+        }
         // create aux canvas
         this.auxCanvas = new OffscreenCanvas(1, 1);
         const auxCtx = this.auxCanvas.getContext('2d');
@@ -79,6 +113,36 @@ export default class RenderEngineWorker<LayerDescriptors extends RenderEngineLay
         this.auxCtx.fillRect(0, 0, 1, 1);
         this.auxCtx.fillRect(1, 1, 1, 1);
         this.missingTexture = createImageBitmap(this.auxCanvas);
+    }
+
+    handleWorkerMessage(e: MessageEvent<[RenderWorkerMessages, ...any[]]>): void {
+        switch (e.data[0]) {
+            case RenderWorkerMessages.FRAMEDATA:
+                break;
+            case RenderWorkerMessages.FRAMETICK:
+                break;
+            case RenderWorkerMessages.FRAMECONT:
+                break;
+            default:
+                throw new RenderEngineError('Unmatched worker message ' + e.data[0]);
+        }
+    }
+
+    /**
+     * Transforms a renderable entity based on its relative position in parent space to global space.
+     * @param entity Entity to transform
+     * @param parent Parent entity to transform relative to
+     * @param cosVal Cosine of the parent entity's angle
+     * @param sinVal Sine of hte parent entity's angle
+     * @returns Transformed renderable in global space
+     */
+    private transformRenderable<Renderable extends CompositeRenderable | RectangleRenderable | TexturedRenderable | TextRenderable>(entity: Renderable, parent: CompositeRenderable, cosVal: number, sinVal: number): Renderable {
+        return {
+            ...entity,
+            x: parent.x + entity.x * cosVal - entity.y * sinVal,
+            y: parent.y + entity.y * cosVal + entity.x * sinVal,
+            angle: (parent.angle) + (entity.angle)
+        };
     }
 
     private getStats(arr: number[]): Stats {
@@ -99,9 +163,18 @@ export default class RenderEngineWorker<LayerDescriptors extends RenderEngineLay
                 draw: this.getStats(this.metricsCounters.drawTimings)
             }
         };
-        postMessage([]);
+        postMessage([RenderWorkerMessages.METRICS, metrics], '', [metrics]);
     }
 }
 
 // when instantiating
-new RenderEngineWorker<any>();
+self.onmessage = (e: MessageEvent<[RenderWorkerMessages.INIT, OffscreenCanvas, RenderEngineInitPack<any>]>) => {
+    if (e.data[0] == RenderWorkerMessages.INIT) {
+        const renderWorker = new RenderEngineWorker<any>(e.data[1], e.data[2]);
+        self.onmessage = renderWorker.handleWorkerMessage;
+    } else {
+        throw new RenderEngineError('Unexpected worker message ' + e.data[0]);
+    }
+};
+
+postMessage([RenderWorkerMessages.READY]);

@@ -3,7 +3,7 @@
 import { Socket } from 'socket.io-client';
 import { reactive, ref, watch } from 'vue';
 
-import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint, PathRenderable } from '@/game/renderer';
+import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint, PathRenderable, RectangleRenderable, type RenderEngineFrameInput, type RenderEngineInitPack } from '@/game/renderer';
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
@@ -423,6 +423,14 @@ export class GameInstance {
             // ui
             [this.overlayRenderer]
         ]);
+
+        type test1 = RenderEngineFrameInput<['2d', '2d', 'custom']>;
+        type a = test1[0];
+        type test2 = RenderEngineInitPack<['2d', '2d', 'custom']>;
+        type buh = ['a', 'b', 'a']
+        type thing<t extends ('a' | 'b')[]> = {
+            [a in keyof t]: t[a] extends 'a' ? string : number
+        }
     }
 
     private readonly mapEdgeBuffer = 16;
@@ -552,8 +560,8 @@ export class GameInstance {
         }
         if (chunkBorders[chunkBorders.length - 1].x != 0) chunkBorders.push({ type: 'line', x: 0, y: ceilChunkHeight });
         for (let x = 0; x <= ceilChunkWidth; x += GameMap.chunkSize) {
-            if (x % doubleSize == 0) chunkBorders.push({ type: 'line', x: x, y: ceilChunkHeight}, { type: 'line', x: x, y: 0});
-            else chunkBorders.push({ type: 'line', x: x, y: 0}, { type: 'line', x: x, y: ceilChunkHeight});
+            if (x % doubleSize == 0) chunkBorders.push({ type: 'line', x: x, y: ceilChunkHeight }, { type: 'line', x: x, y: 0 });
+            else chunkBorders.push({ type: 'line', x: x, y: 0 }, { type: 'line', x: x, y: ceilChunkHeight });
         }
         return [
             partialEntities.map((entity) => new TexturedRenderable({ ...entity, texture: textures[0] })),
@@ -649,7 +657,7 @@ class UIOverlayRenderer extends CustomRenderable {
     ping: number = 0;
     detailed: boolean = false;
 
-    draw(ctx: CanvasRenderingContext2D) {
+    draw(ctx: OffscreenCanvasRenderingContext2D) {
         ctx.font = '14px \'Source Code Pro\'';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
