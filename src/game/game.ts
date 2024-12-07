@@ -3,7 +3,7 @@
 import { Socket } from 'socket.io-client';
 import { reactive, ref, watch } from 'vue';
 
-import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint, PathRenderable, RectangleRenderable, type RenderEngineFrameInput, type RenderEngineInitPack } from '@/game/renderer';
+import RenderEngine, { type RenderEngineViewport, TexturedRenderable, CustomRenderable, type RenderEngineMetrics, type LinearPoint, PathRenderable } from '@/game/renderer';
 import '@/game/sound';
 
 import { modal } from '@/components/modal';
@@ -398,7 +398,7 @@ export class GameInstance {
         }
         // generate new map stuff if needed
         if (this.mapRenderables[0][0]?.texture != (await GameMap.current?.textures)?.at(0)) this.mapRenderables = await this.generateMapRenderables();
-        this.renderEngine.sendFrame(this.camera, [
+        this.renderEngine.sendFrameData(this.camera, [
             // map below
             [
                 ...this.mapRenderables[0],
@@ -423,14 +423,6 @@ export class GameInstance {
             // ui
             [this.overlayRenderer]
         ]);
-
-        type test1 = RenderEngineFrameInput<['2d', '2d', 'custom']>;
-        type a = test1[0];
-        type test2 = RenderEngineInitPack<['2d', '2d', 'custom']>;
-        type buh = ['a', 'b', 'a']
-        type thing<t extends ('a' | 'b')[]> = {
-            [a in keyof t]: t[a] extends 'a' ? string : number
-        }
     }
 
     private readonly mapEdgeBuffer = 16;
