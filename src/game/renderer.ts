@@ -669,6 +669,7 @@ export class RenderEngine<LayerDescriptors extends RenderEngineLayerDescriptors>
         this.frame.push(...entities);
         const entityData: RenderEngineFrameInput<LayerDescriptors> = entities.map((layer) => {
             // const entities = [];
+            // all textures are cached and mapped with IDs, caches are mirrored as well
             return [];
         }) as RenderEngineFrameInput<LayerDescriptors>;
         // send to worker
