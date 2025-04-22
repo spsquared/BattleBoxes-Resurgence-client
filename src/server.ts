@@ -55,7 +55,6 @@ export const httpCodeToMessage = (code: number, item?: string): string => {
         case 500: return 'Internal error';
         case 400: return 'Malformed request (is this a bug?)';
         case 401: return 'Not logged in';
-        case 422: return 'ReCAPTCHA check failed';
         case 429: return 'Too many requests';
         case 0: return 'Fetch failed (are you connected to the internet?)';
         default: return `Unknown response: HTTP code ${code} (is this a bug?)`;

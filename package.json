@@ -21,7 +21,6 @@
         "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
     },
     "dependencies": {
-        "recaptcha-v3": "^1.11.3",
         "socket.io-client": "^4.7.5",
         "vue": "^3.4.38"
     },

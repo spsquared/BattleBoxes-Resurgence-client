@@ -5,7 +5,6 @@ import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { checkConnection, httpCodeToMessage, serverFetch } from '@/server';
 import * as Inputs from '@/components/inputs';
 import GameSelectBackground from './GameSelectBackground.vue';
-import { executeRecaptcha } from '@/login/recaptcha';
 import { GameInstance, type GameInfo } from '@/game/game';
 import LoadingSpinner from '@/components/loaders/LoadingSpinner.vue';
 
@@ -58,8 +57,7 @@ onUnmounted(() => {
 
 const joinGame = async (code: string) => {
     joinGameWait.value = true;
-    const token = await executeRecaptcha('join_game');
-    const res = await serverFetch('/games/joinGame/' + code, 'POST', { captcha: token });
+    const res = await serverFetch('/games/joinGame/' + code, 'POST');
     if (res.status == 200) {
         const { id, authCode } = await res.json();
         new GameInstance(id, authCode);
@@ -76,8 +74,7 @@ const joinGame = async (code: string) => {
 
 const createGame = async () => {
     joinGameWait.value = true;
-    const token = await executeRecaptcha('create_game');
-    const res = await serverFetch('/games/createGame', 'POST', { ...options, captcha: token });
+    const res = await serverFetch('/games/createGame', 'POST', { ...options });
     if (res.status == 200) {
         const { id, authCode } = await res.json();
         new GameInstance(id, authCode);
@@ -155,7 +152,7 @@ const createGame = async () => {
                     <div class="gameOptionsWrapper">
                         <div class="gameOptionsTable">
                             <label for="optMaxPlayers" title="Maximum amount of players, including AI players">Max Players:</label>
-                            <Inputs.NumberBox v-model="options.maxPlayers" id="optMaxPlayers" title="Maximum amount of players, including AI players" :min="0" :max="8" :step="1" width="8em"></Inputs.NumberBox>
+                            <Inputs.NumberBox v-model="options.maxPlayers" id="optMaxPlayers" title="Maximum amount of players, including AI players" :min="2" :max="8" :step="1" width="8em"></Inputs.NumberBox>
                             <label for="optAIPlayers" title="Amount of AI agents to spawn">AI Players:</label>
                             <Inputs.NumberBox v-model="options.aiPlayers" id="optAIPlayers" title="Amount of AI agents to spawn" :min="0" :max="8" :step="1" width="8em"></Inputs.NumberBox>
                             <label for="optPublic" title="Allow any player to join from game list">Public:</label>
