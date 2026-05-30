@@ -1,5 +1,3 @@
-import * as workerPath from 'file-loader?name=[name].js!./renderworker';
-
 /**
  * An entity with a custom `draw` function.
  */
@@ -549,7 +547,7 @@ export class RenderEngine<LayerDescriptors extends RenderEngineLayerDescriptors>
             culling: layer.culling ?? true
         })) as RenderEngineLayersMeta<LayerDescriptors>;
         // create and set up worker
-        this.worker = new Worker(workerPath);
+        this.worker = new Worker(new URL('./renderworker.ts', import.meta.url), { type: 'module' });
         let workerPromiseResolve: () => void = () => { };
         this.readyPromise = new Promise((resolve) => workerPromiseResolve = resolve);
         this.worker.onmessage = (e) => {
@@ -669,7 +667,9 @@ export class RenderEngine<LayerDescriptors extends RenderEngineLayerDescriptors>
         this.frame.push(...entities);
         const entityData: RenderEngineFrameInput<LayerDescriptors> = entities.map((layer) => {
             // const entities = [];
-            // all textures are cached and mapped with IDs, caches are mirrored as well
+            // textures are cached and given IDs - id passed to renderer instead of texture if cached
+            // cache entries are deleted after some period of unuse
+            // culling is done here too since entities need to be stripped of extra fields and functions
             return [];
         }) as RenderEngineFrameInput<LayerDescriptors>;
         // send to worker

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     text: string
     img: string
     title?: string
@@ -15,7 +15,6 @@ defineProps<{
     imgOnly?: boolean
     type?: 'button' | 'submit'
     disabled?: boolean
-    glitchOnMount?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'click'): any
@@ -26,19 +25,22 @@ function click() {
 </script>
 
 <template>
-    <label :class="'uiIconButtonLabel ' + ($props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title=title>
-        <input :type="$props.type ?? 'button'" class="uiIconButton" @click="click" :disabled=$props.disabled>
-        <div :class="$props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
-        <span class="uiIconButtonText" v-if="!$props.imgOnly">{{ $props.text }}</span>
+    <label :class="'uiIconButtonLabel ' + (props.disabled ? 'uiIconButtonLabelDisabled' : '')" :title="props.title">
+        <input :type="props.type ?? 'button'" class="uiIconButton" @click="click" :disabled="props.disabled">
+        <div :class="props.noMask ? 'uiIconButtonImgNoMask' : 'uiIconButtonImage'"></div>
+        <span class="uiIconButtonText" v-if="!props.imgOnly">{{ $props.text }}</span>
     </label>
 </template>
 
 <style scoped>
 .uiIconButtonLabel {
-    display: flex;
+    display: inline-flex;
+    position: relative;
+    top: 5px;
     box-sizing: border-box;
     width: v-bind("$props.width ?? 'min-content'");
     height: v-bind("$props.height ?? 'min-content'");
+    min-height: 32px;
     border: 4px solid black;
     margin: 0px 4px;
     padding: v-bind("$props.imgOnly ? '0.125em 0.125em' : '0.125em 0.4em'");
@@ -101,7 +103,6 @@ function click() {
 .uiIconButtonLabelDisabled {
     border-color: #555 !important;
     transform: none !important;
-    opacity: 1;
     cursor: not-allowed;
     filter: saturate(0.5);
 }

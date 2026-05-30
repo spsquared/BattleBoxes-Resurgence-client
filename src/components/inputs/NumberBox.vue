@@ -1,8 +1,9 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     min?: number
     max?: number
     step?: number
+    strict?: boolean
     highlightInvalid?: boolean
     title?: string
     width?: string
@@ -11,6 +12,7 @@ defineProps<{
     fontSize?: string
     color?: string
     backgroundColor?: string
+    disabled?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'input', value: number): any
@@ -26,10 +28,21 @@ function keypress(e: KeyboardEvent) {
 defineExpose({
     value: number
 });
+function blur() {
+    if (props.strict) {
+        const clamped = Math.max(props.min ?? -Infinity, Math.min(number.value, props.max ?? Infinity));
+        if (props.step != undefined && props.step > 0) {
+            number.value = Number((Math.round(clamped / props.step) * props.step).toFixed((props.step.toString().split('.')[1] ?? '').length));
+        } else {
+            number.value = clamped;
+        }
+        input();
+    }
+}
 </script>
 
 <template>
-    <input type="number" :class="'uiNumberBox ' + ($props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input="input" @keypress="keypress" v-model=number :title=$props.title :min=$props.min :max=$props.max :step=$props.step>
+    <input type="number" :class="'uiNumberBox ' + (props.highlightInvalid ? 'uiNumberBoxHighlightInvalid' : '')" @input="input" @keypress="keypress" @blur="blur" v-model=number :title="props.title" :min="props.min" :max="props.max" :step="props.step" :disabled="props.disabled">
 </template>
 
 <style scoped>
@@ -60,8 +73,7 @@ defineExpose({
 
 .uiNumberBox:disabled {
     border-color: #555 !important;
-    opacity: 1;
+    background-color: #CCC;
     cursor: not-allowed;
-    filter: saturate(0.5);
 }
 </style>

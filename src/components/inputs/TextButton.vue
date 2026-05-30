@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     text: string
     title?: string
     width?: string
@@ -9,6 +9,7 @@ defineProps<{
     color?: string
     backgroundColor?: string
     type?: 'button' | 'submit'
+    disabled?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'click'): any
@@ -20,7 +21,7 @@ function click() {
 </script>
 
 <template>
-    <input :type="$props.type ?? 'button'" class="uiButton" :value=$props.text @click="click" :title=$props.title>
+    <input :type="props.type ?? 'button'" class="uiButton" :value="props.text" @click="click" :title="props.title" :disabled="props.disabled">
 </template>
 
 <style scoped>
@@ -28,6 +29,7 @@ function click() {
     box-sizing: border-box;
     width: v-bind("$props.width ?? 'unset'");
     height: v-bind("$props.height ?? 'min-content'");
+    min-height: 32px;
     margin: 0px 4px;
     padding: 0.125em 0.4em;
     border: 4px solid black;
@@ -53,7 +55,6 @@ function click() {
 .uiButton:disabled {
     border-color: #555 !important;
     transform: none !important;
-    opacity: 1;
     cursor: not-allowed;
     filter: saturate(0.5);
 }

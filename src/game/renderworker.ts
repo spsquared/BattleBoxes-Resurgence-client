@@ -169,6 +169,7 @@ export default class RenderEngineWorker<LayerDescriptors extends RenderEngineLay
         }
         this.viewport.scale = viewport.scale;
         // sort entities here as is only needed once
+        // remove culling stuff as it's already done on main thread
     }
 
     /**

@@ -17,6 +17,7 @@ const props = defineProps<{
     backgroundColor?: string
     default?: string
     multiple?: boolean
+    disabled?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'input', value: string | string[]): any
@@ -36,12 +37,12 @@ defineExpose({
 </script>
 
 <template>
-    <select class="uiDropdown" @change="input" v-model=selected :title=props.title :multiple=props.multiple>
-        <option v-for="item in props.items" :key=item.value :value=item.value>
+    <select class="uiDropdown" @change="input" v-model="selected" :title="props.title" :multiple="props.multiple" :disabled="props.disabled">
+        <option v-for="item in props.items" :key="item.value" :value="item.value">
             {{ item.text }}
         </option>
-        <optgroup v-for="itemGroup in props.groupedItems" :key=itemGroup.label :label=itemGroup.label>
-            <option v-for="item in itemGroup.items" :key=item.text :label=item.text>
+        <optgroup v-for="itemGroup in props.groupedItems" :key="itemGroup.label" :label="itemGroup.label">
+            <option v-for="item in itemGroup.items" :key="item.text" :label="item.text">
                 {{ item.value }}
             </option>
         </optgroup>
@@ -104,9 +105,8 @@ defineExpose({
 
 .uiDropdown:disabled {
     border-color: #555 !important;
-    opacity: 1;
+    background-color: #CCC;
     cursor: not-allowed;
-    filter: saturate(0.5);
 }
 
 .uiDropdown:disabled option {

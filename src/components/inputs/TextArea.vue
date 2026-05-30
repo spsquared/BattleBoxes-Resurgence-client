@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     title?: string
     width?: string
     height?: string
@@ -13,6 +13,7 @@ defineProps<{
     backgroundColor?: string
     placeholder?: string
     resize?: 'vertical' | 'horizontal' | 'both' | 'none'
+    disabled?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'input', value: string): any
@@ -31,7 +32,7 @@ defineExpose({
 </script>
 
 <template>
-    <textarea class="uiTextArea" @input="input" @keypress="keypress" v-model=text :title=$props.title :placeholder=$props.placeholder></textarea>
+    <textarea class="uiTextArea" @input="input" @keypress="keypress" v-model="text" :title="props.title" :placeholder="props.placeholder" :disabled="props.disabled"></textarea>
 </template>
 
 <style scoped>
@@ -63,8 +64,7 @@ defineExpose({
 
 .uiTextArea:disabled {
     border-color: #555 !important;
-    opacity: 1;
+    background-color: #CCC;
     cursor: not-allowed;
-    filter: saturate(0.5);
 }
 </style>

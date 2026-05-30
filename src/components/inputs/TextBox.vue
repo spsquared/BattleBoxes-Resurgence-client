@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     highlightInvalid?: boolean
     title?: string
     width?: string
@@ -11,6 +11,7 @@ defineProps<{
     type?: 'text' | 'password' | 'email'
     placeholder?: string
     autocomplete?: 'username' | 'current-password' | 'new-password' | 'email' | 'name' | 'honorific-prefix' | 'given-name' | 'additional-name' | 'family-name' | 'honorific-suffix' | 'nickname' | 'off'
+    disabled?: boolean
 }>();
 const emit = defineEmits<{
     (e: 'input', value: string): any
@@ -29,7 +30,7 @@ defineExpose({
 </script>
 
 <template>
-    <input :type="$props.type ?? 'text'" :class="'uiTextBox ' + (($props.highlightInvalid && text.length > 0) ? 'uiTextBoxHighlightInvalid' : '')" @input="input" @keypress="keypress" v-model=text :title=$props.title :placeholder=$props.placeholder :autocomplete="$props.autocomplete ?? 'off'">
+    <input :type="props.type ?? 'text'" :class="'uiTextBox ' + ((props.highlightInvalid && text.length > 0) ? 'uiTextBoxHighlightInvalid' : '')" @input="input" @keypress="keypress" v-model="text" :title="props.title" :placeholder="props.placeholder" :autocomplete="props.autocomplete ?? 'off'" :disabled="props.disabled">
 </template>
 
 <style scoped>
@@ -61,7 +62,6 @@ defineExpose({
 .uiTextBox:disabled {
     border-color: #555 !important;
     background-color: #CCC;
-    opacity: 1;
     cursor: not-allowed;
 }
 </style>

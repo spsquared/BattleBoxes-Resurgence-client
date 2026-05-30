@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
     title?: string
     color1?: string
     color2?: string
@@ -18,8 +18,8 @@ defineExpose({
 </script>
 
 <template>
-    <label :class="'uiToggleLabel ' + ($props.disabled ? 'uiToggleLabelDisabled' : '')">
-        <input class="uiToggleInput" type="checkbox" @change="input" v-model=checked :title=title :disabled=$props.disabled>
+    <label :class="'uiToggleLabel ' + (props.disabled ? 'uiToggleLabelDisabled' : '')">
+        <input class="uiToggleInput" type="checkbox" @change="input" v-model="checked" :title="props.title" :disabled="props.disabled">
         <span class="uiToggleSlider"></span>
     </label>
 </template>
@@ -28,14 +28,14 @@ defineExpose({
 .uiToggleLabel {
     display: inline-block;
     position: relative;
-    bottom: 7px;
+    bottom: 5px;
     width: 60px;
     height: 32px;
-    margin-top: 7px;
+    margin: 0px 4px;
 }
 
 .uiToggleInput {
-    opacity: 0px;
+    opacity: 0;
     width: 0px;
     height: 0px;
 }
@@ -75,13 +75,12 @@ defineExpose({
 
 .uiToggleLabelDisabled {
     border-color: #555 !important;
-    opacity: 1;
     cursor: not-allowed;
 }
 
 .uiToggleLabelDisabled .uiToggleSlider, .uiToggleLabelDisabled .uiToggleSlider::before {
     border-color: #555 !important;
-    opacity: 1;
     filter: saturate(0.5);
+    cursor: not-allowed;
 }
 </style>
